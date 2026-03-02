@@ -673,3 +673,83 @@ class TestCollection:
         assert len(tags) == 1
         assert tags[0]["tag_string"] == "apple:track:1440904001"
         assert tags[0]["type"] == "track"
+
+
+class TestFormatExistingTag:
+    SAMPLE_TRACK = [{"track_id": 1440904001, "name": "Women", "artist": "Def Leppard",
+                     "album": "Hysteria", "artwork_url": "https://example.com/art.jpg"}]
+    SAMPLE_TRACKS = [{"track_id": 1440904001, "name": "Women", "track_number": 1,
+                      "artist": "Def Leppard", "album": "Hysteria",
+                      "artwork_url": "https://example.com/art.jpg"}]
+
+    def test_track_tag_returns_name_and_artist(self):
+        from app import _format_existing_tag
+        with patch("app.apple_music.get_track", return_value=self.SAMPLE_TRACK):
+            assert _format_existing_tag("apple:track:1440904001") == "Women by Def Leppard"
+
+    def test_album_tag_returns_album_and_artist(self):
+        from app import _format_existing_tag
+        with patch("app.apple_music.get_album_tracks", return_value=self.SAMPLE_TRACKS):
+            assert _format_existing_tag("apple:1440903625") == "Hysteria by Def Leppard"
+
+    def test_empty_track_results_returns_raw_string(self):
+        from app import _format_existing_tag
+        with patch("app.apple_music.get_track", return_value=[]):
+            assert _format_existing_tag("apple:track:1440904001") == "apple:track:1440904001"
+
+    def test_empty_album_results_returns_raw_string(self):
+        from app import _format_existing_tag
+        with patch("app.apple_music.get_album_tracks", return_value=[]):
+            assert _format_existing_tag("apple:1440903625") == "apple:1440903625"
+
+    def test_exception_in_lookup_returns_raw_string(self):
+        from app import _format_existing_tag
+        with patch("app.apple_music.get_track", side_effect=Exception("network error")):
+            assert _format_existing_tag("apple:track:1440904001") == "apple:track:1440904001"
+
+
+class TestNfcRoutes503:
+    """Routes that call _make_nfc return 503 when Pi libraries not installed."""
+
+    def _pn532_config(self, tmp_path, monkeypatch):
+        import app
+        config_file = tmp_path / "config_pn532.json"
+        config_file.write_text(json.dumps({
+            "sn": "3", "speaker_ip": "10.0.0.12",
+            "speaker_name": "Family Room", "nfc_mode": "pn532",
+        }))
+        monkeypatch.setattr(app, "CONFIG_PATH", str(config_file))
+        monkeypatch.setattr(app, "TAGS_PATH", str(tmp_path / "tags.json"))
+
+    def test_write_tag_503_on_import_error(self, client, tmp_path, monkeypatch):
+        self._pn532_config(tmp_path, monkeypatch)
+        with patch("app.PN532NFC", side_effect=ImportError("no module named board")):
+            resp = client.post("/write-tag", json={"album_id": "1440903625"})
+        assert resp.status_code == 503
+        assert "not installed" in resp.get_json()["error"]
+
+    def test_write_url_tag_503_on_import_error(self, client, tmp_path, monkeypatch):
+        self._pn532_config(tmp_path, monkeypatch)
+        with patch("app.PN532NFC", side_effect=ImportError("no module named board")):
+            resp = client.post("/write-url-tag")
+        assert resp.status_code == 503
+        assert "not installed" in resp.get_json()["error"]
+
+    def test_read_tag_error_json_on_import_error(self, client, tmp_path, monkeypatch):
+        self._pn532_config(tmp_path, monkeypatch)
+        with patch("app.PN532NFC", side_effect=ImportError("no module named board")):
+            resp = client.get("/read-tag")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["error"] is not None
+        assert "not installed" in data["error"]
+
+    def test_do_record_tag_exception_still_returns_ok(self, client, tmp_path, monkeypatch):
+        self._pn532_config(tmp_path, monkeypatch)
+        mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
+        with patch("app.PN532NFC", return_value=mock_nfc), \
+             patch("app.apple_music.get_album_tracks", side_effect=Exception("API error")):
+            resp = client.post("/write-tag", json={"album_id": "1440903625"})
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "ok"

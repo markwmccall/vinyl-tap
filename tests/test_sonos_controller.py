@@ -302,3 +302,108 @@ class TestGetSpeakers:
         with patch("soco.discover", return_value=None):
             speakers = get_speakers()
         assert speakers == []
+
+
+class TestLookupAppleMusicUdn:
+    SAMPLE_UDN = "SA_RINCON52231_X_#Svc52231-f7c0f087-Token"
+
+    def _xml(self, res_uri, resmd):
+        return (
+            '<DIDL-Lite xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/">'
+            f'<item><r:res>{res_uri}</r:res><r:resMD>{resmd}</r:resMD></item>'
+            '</DIDL-Lite>'
+        )
+
+    def test_returns_udn_when_sn_matches(self, mock_speaker):
+        from sonos_controller import _lookup_apple_music_udn
+        xml = self._xml(
+            "x-sonos-http:song%3a1440904001.mp4?sid=204&amp;flags=8232&amp;sn=3",
+            self.SAMPLE_UDN,
+        )
+        mock_speaker.contentDirectory.Browse.return_value = {"Result": xml}
+        assert _lookup_apple_music_udn(mock_speaker, "3") == self.SAMPLE_UDN
+
+    def test_returns_fallback_when_sn_not_in_uri(self, mock_speaker):
+        from sonos_controller import _lookup_apple_music_udn
+        xml = self._xml(
+            "x-sonos-http:song%3a1440904001.mp4?sid=204&amp;sn=9",
+            self.SAMPLE_UDN,
+        )
+        mock_speaker.contentDirectory.Browse.return_value = {"Result": xml}
+        assert _lookup_apple_music_udn(mock_speaker, "3") == "SA_RINCON52231_"
+
+    def test_returns_fallback_on_exception(self, mock_speaker):
+        from sonos_controller import _lookup_apple_music_udn
+        mock_speaker.contentDirectory.Browse.side_effect = Exception("network error")
+        assert _lookup_apple_music_udn(mock_speaker, "3") == "SA_RINCON52231_"
+
+
+class TestGetNowPlayingExtra:
+    def test_returns_none_when_title_empty(self, mock_speaker):
+        from sonos_controller import get_now_playing
+        mock_speaker.get_current_transport_info.return_value = {
+            "current_transport_state": "PLAYING"
+        }
+        mock_speaker.get_current_track_info.return_value = {
+            "title": "", "artist": "", "album": "", "uri": "",
+        }
+        assert get_now_playing("10.0.0.12") is None
+
+
+class TestTransportSelfHealing:
+    def test_pause_heals_on_exception(self, mocker):
+        from sonos_controller import pause
+        old_speaker = MagicMock()
+        old_speaker.pause.side_effect = Exception("connection refused")
+        new_speaker = MagicMock()
+        mocker.patch("soco.SoCo", side_effect=[old_speaker, new_speaker])
+        mocker.patch("sonos_controller._rediscover_speaker", return_value="10.0.0.99")
+        pause("10.0.0.12", speaker_name="Living Room", config_path="/tmp/config.json")
+        new_speaker.pause.assert_called_once()
+
+    def test_pause_raises_without_speaker_info(self, mocker):
+        import pytest
+        from sonos_controller import pause
+        speaker = MagicMock()
+        speaker.pause.side_effect = Exception("connection refused")
+        mocker.patch("soco.SoCo", return_value=speaker)
+        with pytest.raises(Exception, match="connection refused"):
+            pause("10.0.0.12")
+
+    def test_resume_heals_on_exception(self, mocker):
+        from sonos_controller import resume
+        old_speaker = MagicMock()
+        old_speaker.play.side_effect = Exception("connection refused")
+        new_speaker = MagicMock()
+        mocker.patch("soco.SoCo", side_effect=[old_speaker, new_speaker])
+        mocker.patch("sonos_controller._rediscover_speaker", return_value="10.0.0.99")
+        resume("10.0.0.12", speaker_name="Living Room", config_path="/tmp/config.json")
+        new_speaker.play.assert_called_once()
+
+    def test_resume_raises_without_speaker_info(self, mocker):
+        import pytest
+        from sonos_controller import resume
+        speaker = MagicMock()
+        speaker.play.side_effect = Exception("connection refused")
+        mocker.patch("soco.SoCo", return_value=speaker)
+        with pytest.raises(Exception, match="connection refused"):
+            resume("10.0.0.12")
+
+    def test_stop_heals_on_exception(self, mocker):
+        from sonos_controller import stop
+        old_speaker = MagicMock()
+        old_speaker.stop.side_effect = Exception("connection refused")
+        new_speaker = MagicMock()
+        mocker.patch("soco.SoCo", side_effect=[old_speaker, new_speaker])
+        mocker.patch("sonos_controller._rediscover_speaker", return_value="10.0.0.99")
+        stop("10.0.0.12", speaker_name="Living Room", config_path="/tmp/config.json")
+        new_speaker.stop.assert_called_once()
+
+    def test_stop_raises_without_speaker_info(self, mocker):
+        import pytest
+        from sonos_controller import stop
+        speaker = MagicMock()
+        speaker.stop.side_effect = Exception("connection refused")
+        mocker.patch("soco.SoCo", return_value=speaker)
+        with pytest.raises(Exception, match="connection refused"):
+            stop("10.0.0.12")

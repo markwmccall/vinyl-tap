@@ -84,6 +84,21 @@ class TestParseNdefText:
         # TLV type=0x03, length=2, only 2 bytes of record data (too short to parse)
         assert _parse_ndef_text(bytes([0x03, 0x02, 0xD1, 0x01])) is None
 
+    def test_returns_none_for_uri_record_type(self):
+        from nfc_interface import _build_ndef_uri_tlv, _parse_ndef_text
+        # URI records have type 'U' (0x55), not 'T' — should return None
+        tlv = _build_ndef_uri_tlv("http://vinyl-pi.local:5000")
+        assert _parse_ndef_text(tlv) is None
+
+    def test_parses_three_byte_length_encoding(self):
+        from nfc_interface import _parse_ndef_text
+        # Build TLV manually with 3-byte length encoding (length byte = 0xFF)
+        payload = bytes([0x02, 0x65, 0x6E]) + b"apple:1440903625"  # lang "en"
+        record = bytes([0xD1, 0x01, len(payload), 0x54]) + payload
+        length = len(record)
+        tlv = bytes([0x03, 0xFF, (length >> 8) & 0xFF, length & 0xFF]) + record + bytes([0xFE])
+        assert _parse_ndef_text(tlv) == "apple:1440903625"
+
 
 class TestBuildNdefTextTlv:
     def test_starts_with_ndef_tlv_type(self):
@@ -202,3 +217,12 @@ class TestPN532NFC:
         nfc = self._make_nfc(mock_pn532)
         with pytest.raises(IOError, match="locked"):
             nfc.write_url_tag("http://vinyl-pi.local:5000")
+
+    def test_read_tag_stops_reading_when_block_returns_none(self):
+        mock_pn532 = MagicMock()
+        mock_pn532.read_passive_target.return_value = b"\x04\x12\x34\x56"
+        mock_pn532.ntag2xx_read_block.return_value = None  # immediate None on first block
+        nfc = self._make_nfc(mock_pn532)
+        result = nfc.read_tag()
+        assert result is None
+        assert mock_pn532.ntag2xx_read_block.call_count == 1  # stopped at first None

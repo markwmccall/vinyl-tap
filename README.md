@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/markwmccall/vinyl-emulator/actions/workflows/tests.yml/badge.svg)](https://github.com/markwmccall/vinyl-emulator/actions/workflows/tests.yml)
 
-> **Work in progress.** The software is functional and tested, but the NFC hardware integration (`PN532NFC`) is not yet complete — the Pi can run the web UI and play music, but physical card taps do not work yet. This will be resolved once the Waveshare PN532 NFC HAT arrives. Use `--simulate` mode in the meantime.
+> **Work in progress.** The software is functional and tested. The web UI, Sonos playback, and tag writing are all working. Physical NFC card taps (`PN532NFC`) are not yet implemented — use `--simulate` mode or the web UI's Play Now button in the meantime.
 
 Tap an NFC card → an album or song plays on your Sonos speaker.
 
@@ -40,7 +40,38 @@ A Flask web app running on the same Pi lets you:
 
 ## Raspberry Pi setup
 
-After assembling the hardware and flashing **Raspberry Pi OS Lite (32-bit)** (headless, with SSH and WiFi configured in Raspberry Pi Imager):
+### 1. Flash the SD card
+
+Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/). Select **Raspberry Pi OS Lite (64-bit)**. Before writing, open the settings (gear icon) and configure:
+
+- Hostname: `vinyl-pi`
+- Enable SSH
+- Set a username and password
+- Configure your WiFi network
+
+### 2. Assemble the hardware
+
+Attach the PN532 NFC HAT to the Pi's 40-pin GPIO header. Before powering on, set the HAT's interface switch to **SPI** — refer to the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT) for the exact switch position.
+
+Insert the SD card and power on. Wait about 60 seconds, then SSH in:
+
+```bash
+ssh pi@vinyl-pi.local
+```
+
+### 3. Verify the HAT is detected
+
+Before running setup, confirm the PN532 HAT is working:
+
+```bash
+pip3 install adafruit-circuitpython-pn532
+curl -O https://raw.githubusercontent.com/adafruit/Adafruit_CircuitPython_PN532/main/examples/pn532_simpletest.py
+python3 pn532_simpletest.py
+```
+
+Hold an NFC card near the reader. You should see the card's UID printed. If nothing happens, check that the HAT is firmly seated on the GPIO pins and the interface switch is set to SPI.
+
+### 4. Clone and run setup
 
 ```bash
 git clone https://github.com/markwmccall/vinyl-emulator.git
@@ -57,7 +88,50 @@ chmod +x setup.sh && ./setup.sh
 
 It will prompt you to reboot at the end — SPI requires a reboot to take effect.
 
+### 5. Configure
+
 After rebooting, open `http://vinyl-pi.local:5000` in your browser and go to **Settings**. Use the **Discover** button to find your Sonos speaker IP, and the **Detect** button to find your `sn` value automatically. See [Configuration](#configuration) for details on `sn`.
+
+---
+
+## Updating
+
+To update to the latest release on the Pi:
+
+```bash
+cd ~/vinyl-emulator
+git fetch --tags
+git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
+pip3 install --break-system-packages -r requirements.txt
+sudo systemctl restart vinyl-web vinyl-player
+```
+
+---
+
+## Troubleshooting
+
+**`http://vinyl-pi.local:5000` doesn't load**
+- Check the service is running: `sudo systemctl status vinyl-web`
+- Check the Pi is on the network: `ping vinyl-pi.local`
+- Try the IP address directly if mDNS isn't resolving
+
+**HAT not detected by the test script**
+- Confirm the interface switch on the HAT is set to SPI (not I2C or UART)
+- Check the HAT is firmly seated — all 40 pins engaged
+- SPI must be enabled: `sudo raspi-config` → Interface Options → SPI
+
+**Music doesn't play after tapping a card**
+- Check `sudo systemctl status vinyl-player` for errors
+- Confirm `speaker_ip` and `sn` are set correctly in Settings
+- Try Play Now from the web UI to rule out a Sonos configuration issue
+
+**`sn` detection finds nothing**
+- You need at least one Apple Music item saved as a Sonos favorite
+- Try small values manually: `3` or `5` are common
+- Save the value and test with Play Now
+
+**Speaker IP keeps changing**
+- This is handled automatically — the system stores your speaker's room name and rediscovers it if the IP changes after a router reboot
 
 ---
 

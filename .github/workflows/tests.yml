@@ -34,6 +34,50 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml
 
+      - name: Generate test summary
+        if: always()
+        run: |
+          python3 - <<'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          from collections import defaultdict
+
+          tree = ET.parse('results.xml')
+          modules = defaultdict(lambda: {'passed': 0, 'failed': 0, 'skipped': 0, 'time': 0.0})
+          total_p = total_f = total_s = 0
+          total_t = 0.0
+
+          for tc in tree.getroot().iter('testcase'):
+              cls = tc.get('classname', 'unknown')
+              t = float(tc.get('time', 0))
+              if tc.find('failure') is not None or tc.find('error') is not None:
+                  modules[cls]['failed'] += 1; total_f += 1
+              elif tc.find('skipped') is not None:
+                  modules[cls]['skipped'] += 1; total_s += 1
+              else:
+                  modules[cls]['passed'] += 1; total_p += 1
+              modules[cls]['time'] += t
+              total_t += t
+
+          total = total_p + total_f + total_s
+          icon = '✅' if total_f == 0 else '❌'
+          lines = [
+              f'## {icon} Test Results\n',
+              f'**{total} tests** — {total_p} passed, {total_f} failed, {total_s} skipped ({total_t:.2f}s)\n',
+              '| Module | Tests | ✅ | ❌ | ⏭ | Time |',
+              '|--------|------:|---:|---:|---:|-----:|',
+          ]
+          for mod, d in sorted(modules.items()):
+              n = d['passed'] + d['failed'] + d['skipped']
+              lines.append(f"| `{mod}` | {n} | {d['passed']} | {d['failed']} | {d['skipped']} | {d['time']:.2f}s |")
+
+          path = os.environ.get('GITHUB_STEP_SUMMARY')
+          if path:
+              with open(path, 'a') as f:
+                  f.write('\n'.join(lines) + '\n')
+          else:
+              print('\n'.join(lines))
+          PYEOF
+
       - name: Publish test results
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()

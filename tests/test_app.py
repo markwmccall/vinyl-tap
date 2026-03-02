@@ -128,27 +128,35 @@ class TestTrack:
 
 
 class TestWriteTag:
-    def test_calls_write_tag_with_album_data(self, client, temp_config):
+    def test_calls_write_tag_with_album_data(self, client, temp_config, tmp_path, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.status_code == 200
         mock_nfc.write_tag.assert_called_once_with("apple:1440903625")
 
-    def test_returns_written_album_tag_string(self, client, temp_config):
+    def test_returns_written_album_tag_string(self, client, temp_config, tmp_path, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.get_json()["written"] == "apple:1440903625"
 
-    def test_calls_write_tag_with_track_data(self, client, temp_config):
+    def test_calls_write_tag_with_track_data(self, client, temp_config, tmp_path, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"track_id": "1440904001"})
         assert resp.status_code == 200
         mock_nfc.write_tag.assert_called_once_with("apple:track:1440904001")
 
-    def test_returns_written_track_tag_string(self, client, temp_config):
+    def test_returns_written_track_tag_string(self, client, temp_config, tmp_path, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"track_id": "1440904001"})

@@ -6,15 +6,9 @@ Items from code review. See commit history for context.
 
 ## Correctness
 
-- [ ] **Wrong HTTP status on empty track list** — `app.py` returns `200 {"status": "ok"}` when `get_album_tracks()` / `get_track()` returns empty. Should return `404`.
-- [ ] **`_load_config()` KeyError on missing fields** — No validation that `speaker_ip`, `sn`, `nfc_mode` exist. Crashes with unhelpful error if config is incomplete.
-- [ ] **`_load_tags()` crashes on invalid JSON** — `json.load()` not wrapped in try/except. Corrupted `tags.json` brings down the app.
-
----
-
-## Tests
-
-- [x] **Real band names in test fixtures** — All test data uses Def Leppard / *Hysteria* / "Women" / "Rocket" (~70 occurrences across 5 files). Replace with fictional names (e.g. artist "Test Artist", album "Test Album", tracks "Track One" / "Track Two") in `tests/conftest.py`, `tests/test_app.py`, `tests/test_apple_music.py`, `tests/test_player.py`, `tests/test_sonos_controller.py`.
+- [x] **Wrong HTTP status on empty track list** — `app.py` returns `200 {"status": "ok"}` when `get_album_tracks()` / `get_track()` returns empty. Should return `404`.
+- [x] **`_load_config()` KeyError on missing fields** — No validation that `speaker_ip`, `sn`, `nfc_mode` exist. Crashes with unhelpful error if config is incomplete.
+- [x] **`_load_tags()` crashes on invalid JSON** — `json.load()` not wrapped in try/except. Corrupted `tags.json` brings down the app.
 
 ---
 
@@ -30,6 +24,14 @@ Items from code review. See commit history for context.
 - [ ] **systemd missing `RestartSec`** — `Restart=on-failure` with no delay creates tight restart loop on persistent errors. Add `RestartSec=5` to both service files.
 - [ ] **No resource limits in service units** — Add `MemoryLimit=256M` to prevent runaway process consuming all Pi memory.
 - [ ] **`setup.sh` uses `--break-system-packages`** — Bypasses PEP 668 safety. Consider switching to a venv.
+- [ ] **Port 80** — Serve on `http://vinyl-pi.local` instead of port 5000 using authbind or nginx.
+- [ ] **mDNS** — Confirm `vinyl-pi.local` resolves from Mac and iPhone once Pi is on network.
+
+## Hardware
+
+- [ ] **Verify PN532 HAT detects** — Run Adafruit test script after NFC HAT arrives.
+- [ ] **End-to-end test on Pi** — Write tag via web UI, scan tag, music plays.
+- [ ] **Reboot test** — Tap tag after cold boot, music plays without SSH.
 
 ---
 

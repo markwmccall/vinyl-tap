@@ -18,14 +18,22 @@ TAGS_PATH = os.path.join(os.path.dirname(__file__), "tags.json")
 
 def _load_config():
     with open(CONFIG_PATH) as f:
-        return json.load(f)
+        config = json.load(f)
+    required = ["speaker_ip", "sn", "nfc_mode"]
+    missing = [k for k in required if k not in config]
+    if missing:
+        raise RuntimeError(f"Missing required config fields: {', '.join(missing)}")
+    return config
 
 
 def _load_tags():
     if not os.path.exists(TAGS_PATH):
         return []
-    with open(TAGS_PATH) as f:
-        return json.load(f)
+    try:
+        with open(TAGS_PATH) as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return []
 
 
 def _save_tags(tags):
@@ -195,6 +203,8 @@ def play():
         tracks = apple_music.get_track(data["track_id"])
     else:
         tracks = apple_music.get_album_tracks(data["album_id"])
+    if not tracks:
+        return jsonify({"error": "not found"}), 404
     play_album(config["speaker_ip"], tracks, config["sn"],
                speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     return jsonify({"status": "ok"})
@@ -348,6 +358,8 @@ def play_tag():
         tracks = apple_music.get_track(tag["id"])
     else:
         tracks = apple_music.get_album_tracks(tag["id"])
+    if not tracks:
+        return jsonify({"error": "not found"}), 404
     play_album(config["speaker_ip"], tracks, config["sn"],
                speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     return jsonify({"status": "ok"})

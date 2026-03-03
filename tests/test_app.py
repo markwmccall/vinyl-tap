@@ -319,6 +319,20 @@ class TestPlay:
         resp = client.post("/play", json={"other": "value"})
         assert resp.status_code == 400
 
+    def test_unknown_album_returns_404(self, client, temp_config):
+        with patch("app.apple_music.get_album_tracks", return_value=[]), \
+             patch("app.play_album") as mock_play:
+            resp = client.post("/play", json={"album_id": "9999999"})
+        assert resp.status_code == 404
+        mock_play.assert_not_called()
+
+    def test_unknown_track_returns_404(self, client, temp_config):
+        with patch("app.apple_music.get_track", return_value=[]), \
+             patch("app.play_album") as mock_play:
+            resp = client.post("/play", json={"track_id": "9999999"})
+        assert resp.status_code == 404
+        mock_play.assert_not_called()
+
 
 class TestSettings:
     def test_get_returns_200(self, client, temp_config):
@@ -616,6 +630,20 @@ class TestPlayTag:
         resp = client.post("/play/tag", json={})
         assert resp.status_code == 400
 
+    def test_unknown_album_tag_returns_404(self, client, temp_config):
+        with patch("app.apple_music.get_album_tracks", return_value=[]), \
+             patch("app.play_album") as mock_play:
+            resp = client.post("/play/tag", json={"tag": "apple:9999999"})
+        assert resp.status_code == 404
+        mock_play.assert_not_called()
+
+    def test_unknown_track_tag_returns_404(self, client, temp_config):
+        with patch("app.apple_music.get_track", return_value=[]), \
+             patch("app.play_album") as mock_play:
+            resp = client.post("/play/tag", json={"tag": "apple:track:9999999"})
+        assert resp.status_code == 404
+        mock_play.assert_not_called()
+
 
 class TestCollection:
     def test_collection_page_returns_200(self, client, tmp_path, monkeypatch):
@@ -765,3 +793,74 @@ class TestNfcRoutes503:
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.status_code == 200
         assert resp.get_json()["status"] == "ok"
+
+
+class TestLoadConfig:
+    def _write_config(self, tmp_path, monkeypatch, data):
+        import app
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(data))
+        monkeypatch.setattr(app, "CONFIG_PATH", str(config_file))
+
+    def test_valid_config_loads(self, tmp_path, monkeypatch):
+        import app
+        self._write_config(tmp_path, monkeypatch,
+                           {"sn": "3", "speaker_ip": "10.0.0.12", "nfc_mode": "mock"})
+        config = app._load_config()
+        assert config["sn"] == "3"
+
+    def test_missing_speaker_ip_raises(self, tmp_path, monkeypatch):
+        import app
+        self._write_config(tmp_path, monkeypatch, {"sn": "3", "nfc_mode": "mock"})
+        with pytest.raises(RuntimeError, match="speaker_ip"):
+            app._load_config()
+
+    def test_missing_sn_raises(self, tmp_path, monkeypatch):
+        import app
+        self._write_config(tmp_path, monkeypatch, {"speaker_ip": "10.0.0.12", "nfc_mode": "mock"})
+        with pytest.raises(RuntimeError, match="sn"):
+            app._load_config()
+
+    def test_missing_nfc_mode_raises(self, tmp_path, monkeypatch):
+        import app
+        self._write_config(tmp_path, monkeypatch, {"sn": "3", "speaker_ip": "10.0.0.12"})
+        with pytest.raises(RuntimeError, match="nfc_mode"):
+            app._load_config()
+
+    def test_missing_multiple_fields_names_all(self, tmp_path, monkeypatch):
+        import app
+        self._write_config(tmp_path, monkeypatch, {})
+        with pytest.raises(RuntimeError) as exc_info:
+            app._load_config()
+        msg = str(exc_info.value)
+        assert "sn" in msg
+        assert "speaker_ip" in msg
+        assert "nfc_mode" in msg
+
+
+class TestLoadTags:
+    def test_returns_empty_list_when_file_missing(self, tmp_path, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "TAGS_PATH", str(tmp_path / "tags.json"))
+        assert app._load_tags() == []
+
+    def test_returns_tags_from_valid_file(self, tmp_path, monkeypatch):
+        import app
+        tags_file = tmp_path / "tags.json"
+        tags_file.write_text(json.dumps([{"tag_string": "apple:1440903625"}]))
+        monkeypatch.setattr(app, "TAGS_PATH", str(tags_file))
+        assert app._load_tags() == [{"tag_string": "apple:1440903625"}]
+
+    def test_returns_empty_list_on_invalid_json(self, tmp_path, monkeypatch):
+        import app
+        tags_file = tmp_path / "tags.json"
+        tags_file.write_text("not valid json {{{")
+        monkeypatch.setattr(app, "TAGS_PATH", str(tags_file))
+        assert app._load_tags() == []
+
+    def test_returns_empty_list_on_truncated_json(self, tmp_path, monkeypatch):
+        import app
+        tags_file = tmp_path / "tags.json"
+        tags_file.write_text('[{"tag_string": "apple:1')
+        monkeypatch.setattr(app, "TAGS_PATH", str(tags_file))
+        assert app._load_tags() == []

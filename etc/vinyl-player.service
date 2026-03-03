@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/vinyl-emulator/player.py
+ExecStart=/home/pi/vinyl-emulator/.venv/bin/python3 /home/pi/vinyl-emulator/player.py
 WorkingDirectory=/home/pi/vinyl-emulator
 Restart=on-failure
 RestartSec=5

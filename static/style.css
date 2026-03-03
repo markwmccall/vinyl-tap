@@ -237,6 +237,21 @@ main {
 .write-btn:hover { background: var(--btn-action-hover); }
 .write-btn:disabled { background: var(--btn-disabled); cursor: default; }
 
+.print-btn {
+  background: var(--btn-neutral);
+  color: #fff;
+  border: none;
+  padding: var(--btn-padding);
+  border-radius: var(--radius);
+  font-size: var(--btn-font);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+  display: inline-block;
+}
+.print-btn:hover { background: var(--btn-neutral-hover); }
+
 .pause-btn {
   background: var(--btn-neutral);
   color: #fff;

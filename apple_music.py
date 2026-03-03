@@ -11,6 +11,13 @@ def upgrade_artwork_url(url):
     return url.replace("100x100bb", "600x600bb")
 
 
+def _format_duration(ms):
+    if not ms:
+        return ""
+    s = int(ms) // 1000
+    return f"{s // 60}:{s % 60:02d}"
+
+
 def search_albums(query):
     encoded = urllib.parse.quote(query)
     url = f"https://itunes.apple.com/search?term={encoded}&entity=album"
@@ -70,6 +77,9 @@ def get_album_tracks(album_id):
     url = f"https://itunes.apple.com/lookup?id={album_id}&entity=song"
     with urllib.request.urlopen(url, timeout=10) as response:
         data = json.loads(response.read())
+    collection = next((r for r in data["results"] if r.get("wrapperType") == "collection"), None)
+    release_year = collection.get("releaseDate", "")[:4] if collection else ""
+    copyright_line = collection.get("copyright", "") if collection else ""
     tracks = [r for r in data["results"] if r.get("wrapperType") == "track"]
     tracks.sort(key=lambda t: t["trackNumber"])
     return [
@@ -79,7 +89,11 @@ def get_album_tracks(album_id):
             "track_number": t["trackNumber"],
             "artist": t["artistName"],
             "album": t["collectionName"],
+            "album_id": t.get("collectionId"),
             "artwork_url": upgrade_artwork_url(t.get("artworkUrl100", "")),
+            "duration": _format_duration(t.get("trackTimeMillis")),
+            "release_year": release_year,
+            "copyright": copyright_line,
         }
         for t in tracks
     ]

@@ -15,17 +15,20 @@ SAMPLE_SONGS = [
 
 SAMPLE_TRACKS = [
     {"track_id": 1440904001, "name": "Track One", "track_number": 1,
-     "artist": "Test Artist", "album": "Test Album",
-     "artwork_url": "https://example.com/600x600bb.jpg"},
+     "artist": "Test Artist", "album": "Test Album", "album_id": 1440903625,
+     "artwork_url": "https://example.com/600x600bb.jpg",
+     "duration": "4:45", "release_year": "1999", "copyright": "℗ 1999 Test Records"},
     {"track_id": 1440904002, "name": "Track Two", "track_number": 2,
-     "artist": "Test Artist", "album": "Test Album",
-     "artwork_url": "https://example.com/600x600bb.jpg"},
+     "artist": "Test Artist", "album": "Test Album", "album_id": 1440903625,
+     "artwork_url": "https://example.com/600x600bb.jpg",
+     "duration": "3:13", "release_year": "1999", "copyright": "℗ 1999 Test Records"},
 ]
 
 SAMPLE_SINGLE_TRACK = [
     {"track_id": 1440904001, "name": "Track One", "track_number": 1,
-     "artist": "Test Artist", "album": "Test Album",
-     "artwork_url": "https://example.com/600x600bb.jpg"},
+     "artist": "Test Artist", "album": "Test Album", "album_id": 1440903625,
+     "artwork_url": "https://example.com/600x600bb.jpg",
+     "duration": "4:45", "release_year": "1999", "copyright": "℗ 1999 Test Records"},
 ]
 
 
@@ -891,3 +894,61 @@ class TestLoadTags:
         tags_file.write_text('[{"tag_string": "apple:1')
         monkeypatch.setattr(app, "TAGS_PATH", str(tags_file))
         assert app._load_tags() == []
+
+
+class TestPrintInserts:
+    def test_single_album_returns_200(self, client):
+        with patch("app.apple_music.get_album_tracks", return_value=SAMPLE_TRACKS):
+            resp = client.get("/print?ids=1440903625")
+        assert resp.status_code == 200
+
+    def test_renders_album_name(self, client):
+        with patch("app.apple_music.get_album_tracks", return_value=SAMPLE_TRACKS):
+            resp = client.get("/print?ids=1440903625")
+        assert b"Test Album" in resp.data
+
+    def test_renders_artist(self, client):
+        with patch("app.apple_music.get_album_tracks", return_value=SAMPLE_TRACKS):
+            resp = client.get("/print?ids=1440903625")
+        assert b"Test Artist" in resp.data
+
+    def test_renders_track_names(self, client):
+        with patch("app.apple_music.get_album_tracks", return_value=SAMPLE_TRACKS):
+            resp = client.get("/print?ids=1440903625")
+        assert b"Track One" in resp.data
+        assert b"Track Two" in resp.data
+
+    def test_multiple_albums(self, client):
+        tracks_a = [{"track_id": 1, "name": "Song A", "track_number": 1,
+                     "artist": "Artist A", "album": "Album A",
+                     "artwork_url": "https://example.com/a.jpg"}]
+        tracks_b = [{"track_id": 2, "name": "Song B", "track_number": 1,
+                     "artist": "Artist B", "album": "Album B",
+                     "artwork_url": "https://example.com/b.jpg"}]
+        with patch("app.apple_music.get_album_tracks", side_effect=[tracks_a, tracks_b]):
+            resp = client.get("/print?ids=111,222")
+        assert resp.status_code == 200
+        assert b"Album A" in resp.data
+        assert b"Album B" in resp.data
+
+    def test_missing_ids_param_returns_400(self, client):
+        resp = client.get("/print")
+        assert resp.status_code == 400
+
+    def test_empty_ids_returns_400(self, client):
+        resp = client.get("/print?ids=")
+        assert resp.status_code == 400
+
+    def test_all_ids_not_found_returns_404(self, client):
+        with patch("app.apple_music.get_album_tracks", return_value=[]):
+            resp = client.get("/print?ids=9999999")
+        assert resp.status_code == 404
+
+    def test_partial_failure_returns_200_with_found_albums(self, client):
+        tracks_a = [{"track_id": 1, "name": "Song A", "track_number": 1,
+                     "artist": "Artist A", "album": "Album A",
+                     "artwork_url": "https://example.com/a.jpg"}]
+        with patch("app.apple_music.get_album_tracks", side_effect=[tracks_a, []]):
+            resp = client.get("/print?ids=111,999")
+        assert resp.status_code == 200
+        assert b"Album A" in resp.data

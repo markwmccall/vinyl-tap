@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Print Insert{{ 's' if albums|length != 1 else '' }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Screen preview ─────────────────────────────────────────────── */
+    body {
+      background: #2a2a2a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 2rem;
+    }
+
+    .screen-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .screen-header h1 {
+      color: #fff;
+      font-size: 1.25rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .screen-header p {
+      color: #999;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .print-trigger-btn {
+      background: #1565e8;
+      color: #fff;
+      border: none;
+      padding: 0.65rem 1.4rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .print-trigger-btn:hover { background: #2575f8; }
+
+    .inserts-list {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    /* ── Insert card ────────────────────────────────────────────────── */
+    .insert {
+      width: 240mm;
+      height: 120mm;
+      display: flex;
+      background: #fff;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      border: 1px solid #000;
+      overflow: hidden;
+    }
+
+    /* Back panel — track listing */
+    .back-panel {
+      width: 120mm;
+      height: 120mm;
+      padding: 7mm;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-right: 1px dashed #ccc;
+    }
+
+    .back-title {
+      font-size: 8pt;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 1.5mm;
+      line-height: 1.2;
+    }
+
+    .back-artist {
+      font-size: 6.5pt;
+      color: #555;
+      margin-bottom: 3mm;
+      line-height: 1.2;
+    }
+
+    .track-list {
+      list-style: none;
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .track-list li {
+      font-size: 6pt;
+      color: #222;
+      line-height: 1.5;
+      display: flex;
+      gap: 2mm;
+    }
+
+    .track-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .track-duration {
+      flex-shrink: 0;
+      color: #666;
+    }
+
+    .back-copyright {
+      font-size: 5pt;
+      color: #888;
+      margin-top: auto;
+      padding-top: 2mm;
+      line-height: 1.3;
+    }
+
+    /* Front panel — album art */
+    .front-panel {
+      width: 120mm;
+      height: 120mm;
+      flex-shrink: 0;
+    }
+
+    .front-panel img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* ── Print styles ───────────────────────────────────────────────── */
+    @media print {
+      @page { size: landscape; margin: 0; }
+
+      body {
+        background: none;
+        padding: 0;
+      }
+
+      .screen-header { display: none; }
+
+      .inserts-list {
+        gap: 0;
+      }
+
+      /* center each insert on the landscape page */
+      .insert {
+        box-shadow: none;
+        page-break-after: always;
+        margin: auto;
+        /* push down slightly to visually center on page */
+        margin-top: calc((100vh - 120mm) / 2);
+      }
+
+      .insert:last-child { page-break-after: avoid; }
+
+      .back-panel {
+        border-right: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen-header">
+    <h1>CD Jewel Case Insert{{ 's' if albums|length != 1 else '' }}</h1>
+    <p>
+      {{ albums|length }} album{{ 's' if albums|length != 1 else '' }}
+      &mdash; fold each sheet in half, album art facing out
+    </p>
+    <button class="print-trigger-btn" id="print-btn">Print</button>
+  </div>
+
+  <div class="inserts-list">
+    {% for album in albums %}
+    <div class="insert">
+      <div class="back-panel">
+        <div class="back-title">{{ album.name }}</div>
+        <div class="back-artist">{{ album.artist }}{% if album.release_year %} · {{ album.release_year }}{% endif %}</div>
+        <ul class="track-list">
+          {% for track in album.tracks %}
+          <li>
+            <span class="track-name">{{ track.track_number }}. {{ track.name }}</span>
+            {% if track.duration %}<span class="track-duration">{{ track.duration }}</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% if album.copyright %}<div class="back-copyright">{{ album.copyright }}</div>{% endif %}
+      </div>
+      <div class="front-panel">
+        <img src="{{ album.artwork_url }}" alt="{{ album.name }}">
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <script>
+    document.getElementById('print-btn').addEventListener('click', function() {
+      window.print();
+    });
+  </script>
+</body>
+</html>

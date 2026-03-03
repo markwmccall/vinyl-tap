@@ -20,5 +20,5 @@ Items from code review. See commit history for context.
 
 ## Features
 
-- [ ] **Print album art** — From the album/track page, print a CD jewel case front insert (120mm × 120mm square). Should include album art, title, and artist. Options: browser `@media print` stylesheet on a `/print/<album_id>` route, or PDF generation. Consider including a small NFC tap icon or instructions on the reverse.
+- [x] **Print album art** — From the album/track page, print a CD jewel case front insert (120mm × 120mm square). Should include album art, title, and artist. Options: browser `@media print` stylesheet on a `/print/<album_id>` route, or PDF generation. Consider including a small NFC tap icon or instructions on the reverse.
 - [ ] **Apple Music playlists** — Support writing playlist tags and playing playlists on Sonos. Requires research into whether iTunes Search API exposes user playlists (it likely doesn't — may need Apple Music API with OAuth) and whether Sonos can play Apple Music playlist URIs via SMAPI.

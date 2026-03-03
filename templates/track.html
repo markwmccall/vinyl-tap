@@ -24,6 +24,9 @@
         <button id="write-btn" class="write-btn" data-track-id="{{ track_id }}">
           Write to Tag
         </button>
+        {% if track.album_id %}
+        <a href="/print?ids={{ track.album_id }}" class="print-btn" target="_blank">Print Insert</a>
+        {% endif %}
       </div>
       <p id="action-status" class="write-status"></p>
       <div id="write-confirm" class="write-confirm" style="display:none">

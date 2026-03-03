@@ -139,6 +139,32 @@ def track(track_id):
     return render_template("track.html", track_id=track_id, track=tracks[0])
 
 
+@app.route("/print")
+def print_inserts():
+    ids_param = request.args.get("ids", "")
+    if not ids_param:
+        abort(400)
+    album_ids = [int(i) for i in ids_param.split(",") if i.strip().isdigit()]
+    if not album_ids:
+        abort(400)
+    albums = []
+    for album_id in album_ids:
+        tracks = apple_music.get_album_tracks(album_id)
+        if tracks:
+            albums.append({
+                "album_id": album_id,
+                "name": tracks[0]["album"],
+                "artist": tracks[0]["artist"],
+                "artwork_url": tracks[0]["artwork_url"],
+                "release_year": tracks[0].get("release_year", ""),
+                "copyright": tracks[0].get("copyright", ""),
+                "tracks": tracks,
+            })
+    if not albums:
+        abort(404)
+    return render_template("print.html", albums=albums)
+
+
 @app.errorhandler(404)
 def not_found(e):
     return render_template("404.html"), 404

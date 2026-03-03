@@ -66,6 +66,8 @@ SAMPLE_LOOKUP_RESPONSE = {
             "collectionId": 1440903625,
             "collectionName": "Test Album",
             "artistName": "Test Artist",
+            "releaseDate": "1999-03-15T08:00:00Z",
+            "copyright": "℗ 1999 Test Records",
         },
         {
             "wrapperType": "track",
@@ -74,7 +76,9 @@ SAMPLE_LOOKUP_RESPONSE = {
             "trackNumber": 1,
             "artistName": "Test Artist",
             "collectionName": "Test Album",
+            "collectionId": 1440903625,
             "artworkUrl100": "https://example.com/100x100bb.jpg",
+            "trackTimeMillis": 285333,
         },
         {
             "wrapperType": "track",
@@ -83,7 +87,9 @@ SAMPLE_LOOKUP_RESPONSE = {
             "trackNumber": 2,
             "artistName": "Test Artist",
             "collectionName": "Test Album",
+            "collectionId": 1440903625,
             "artworkUrl100": "https://example.com/100x100bb.jpg",
+            "trackTimeMillis": 193000,
         },
     ],
 }

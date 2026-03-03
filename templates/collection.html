@@ -11,6 +11,7 @@
         <option value="name">Sort: Name</option>
         <option value="artist">Sort: Artist</option>
       </select>
+      <button id="print-selected-btn" class="print-btn" style="display:none">Print Selected</button>
       <button id="clear-all-btn" class="clear-all-btn">Clear All</button>
     </div>
   </div>
@@ -26,6 +27,7 @@
 
 <script>
   let tags = {{ tags | tojson }};
+  const list = document.getElementById('tag-list');
 
   function formatDate(iso) {
     const d = new Date(iso + 'Z');
@@ -49,14 +51,20 @@
     emptyMsg.style.display = tags.length ? 'none' : '';
   }
 
+  function updatePrintButton() {
+    const checked = list.querySelectorAll('.tag-select-cb:checked');
+    document.getElementById('print-selected-btn').style.display = checked.length ? '' : 'none';
+  }
+
   function renderTags() {
     const by = document.getElementById('sort-select').value;
     const sorted = sortTags(tags, by);
-    const list = document.getElementById('tag-list');
     list.innerHTML = sorted.map(t => {
       const href = t.type === 'track' ? `/track/${t.track_id}` : `/album/${t.album_id}`;
+      const albumId = t.album_id || '';
       return `
         <li class="tag-item">
+          <input type="checkbox" class="tag-select-cb" data-album-id="${albumId}" ${!albumId ? 'disabled' : ''}>
           <a href="${href}" class="tag-item-link">
             <img src="${t.artwork_url}" alt="" class="tag-art">
             <div class="tag-info">
@@ -83,9 +91,30 @@
         updateCount();
       });
     });
+
+    list.querySelectorAll('.tag-select-cb').forEach(cb => {
+      cb.addEventListener('change', updatePrintButton);
+    });
+
+    updatePrintButton();
   }
 
   document.getElementById('sort-select').addEventListener('change', renderTags);
+
+  document.getElementById('print-selected-btn').addEventListener('click', () => {
+    const ids = [...list.querySelectorAll('.tag-select-cb:checked')]
+      .map(cb => cb.dataset.albumId)
+      .filter(Boolean)
+      .join(',');
+    if (!ids) return;
+    const a = document.createElement('a');
+    a.href = `/print?ids=${ids}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
 
   const clearAllBtn = document.getElementById('clear-all-btn');
   let clearPending = false;

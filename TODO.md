@@ -23,8 +23,8 @@ Items from code review. See commit history for context.
 
 ## Deployment
 
-- [ ] **systemd missing `RestartSec`** — `Restart=on-failure` with no delay creates tight restart loop on persistent errors. Add `RestartSec=5` to both service files.
-- [ ] **No resource limits in service units** — Add `MemoryLimit=256M` to prevent runaway process consuming all Pi memory.
+- [x] **systemd missing `RestartSec`** — `Restart=on-failure` with no delay creates tight restart loop on persistent errors. Add `RestartSec=5` to both service files.
+- [x] **No resource limits in service units** — Add `MemoryLimit=256M` to prevent runaway process consuming all Pi memory.
 - [ ] **`setup.sh` uses `--break-system-packages`** — Bypasses PEP 668 safety. Consider switching to a venv.
 - [ ] **Port 80** — Serve on `http://vinyl-pi.local` instead of port 5000 using authbind or nginx.
 - [ ] **mDNS** — Confirm `vinyl-pi.local` resolves from Mac and iPhone once Pi is on network.

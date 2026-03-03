@@ -67,7 +67,8 @@ sed "s|/home/pi/vinyl-emulator|$REPO_DIR|g; s|User=pi|User=$USERNAME|g" \
 
 sudo systemctl daemon-reload
 sudo systemctl enable vinyl-player vinyl-web
-echo "      Services installed and enabled"
+sudo systemctl restart vinyl-player vinyl-web
+echo "      Services installed, enabled, and restarted"
 
 # --- Done ---
 echo ""

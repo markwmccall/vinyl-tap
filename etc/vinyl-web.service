@@ -7,6 +7,8 @@ Wants=network-online.target
 ExecStart=/usr/bin/python3 /home/pi/vinyl-emulator/app.py --host 0.0.0.0
 WorkingDirectory=/home/pi/vinyl-emulator
 Restart=on-failure
+RestartSec=5
+MemoryLimit=256M
 User=pi
 
 [Install]

@@ -407,3 +407,41 @@ class TestTransportSelfHealing:
         mocker.patch("soco.SoCo", return_value=speaker)
         with pytest.raises(Exception, match="connection refused"):
             stop("10.0.0.12")
+
+    def test_next_heals_on_exception(self, mocker):
+        from sonos_controller import next_track
+        old_speaker = MagicMock()
+        old_speaker.next.side_effect = Exception("connection refused")
+        new_speaker = MagicMock()
+        mocker.patch("soco.SoCo", side_effect=[old_speaker, new_speaker])
+        mocker.patch("sonos_controller._rediscover_speaker", return_value="10.0.0.99")
+        next_track("10.0.0.12", speaker_name="Living Room", config_path="/tmp/config.json")
+        new_speaker.next.assert_called_once()
+
+    def test_next_raises_without_speaker_info(self, mocker):
+        import pytest
+        from sonos_controller import next_track
+        speaker = MagicMock()
+        speaker.next.side_effect = Exception("connection refused")
+        mocker.patch("soco.SoCo", return_value=speaker)
+        with pytest.raises(Exception, match="connection refused"):
+            next_track("10.0.0.12")
+
+    def test_prev_heals_on_exception(self, mocker):
+        from sonos_controller import prev_track
+        old_speaker = MagicMock()
+        old_speaker.previous.side_effect = Exception("connection refused")
+        new_speaker = MagicMock()
+        mocker.patch("soco.SoCo", side_effect=[old_speaker, new_speaker])
+        mocker.patch("sonos_controller._rediscover_speaker", return_value="10.0.0.99")
+        prev_track("10.0.0.12", speaker_name="Living Room", config_path="/tmp/config.json")
+        new_speaker.previous.assert_called_once()
+
+    def test_prev_raises_without_speaker_info(self, mocker):
+        import pytest
+        from sonos_controller import prev_track
+        speaker = MagicMock()
+        speaker.previous.side_effect = Exception("connection refused")
+        mocker.patch("soco.SoCo", return_value=speaker)
+        with pytest.raises(Exception, match="connection refused"):
+            prev_track("10.0.0.12")

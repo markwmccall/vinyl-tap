@@ -41,12 +41,25 @@
   </div>
 
   <script>
+    const pauseBtn = document.getElementById('np-pause-btn');
+    const prevBtn = document.getElementById('np-prev-btn');
+    const nextBtn = document.getElementById('np-next-btn');
+    let paused = false;
+    let suppressHide = false;
+    let suppressHideTimer = null;
+
+    function keepBarVisible() {
+      suppressHide = true;
+      clearTimeout(suppressHideTimer);
+      suppressHideTimer = setTimeout(() => { suppressHide = false; }, 5000);
+    }
+
     async function refreshNowPlaying() {
       try {
         const resp = await fetch('/now-playing');
         const data = await resp.json();
         const bar = document.getElementById('now-playing-bar');
-        if (!data.playing) { bar.style.display = 'none'; return; }
+        if (!data.playing) { if (!suppressHide) { bar.style.display = 'none'; } return; }
         const art = document.getElementById('np-art');
         if (data.artwork_url) { art.src = data.artwork_url; art.style.display = 'block'; }
         else { art.style.display = 'none'; }
@@ -71,11 +84,6 @@
       } catch (e) {}
     }
 
-    const pauseBtn = document.getElementById('np-pause-btn');
-    const prevBtn = document.getElementById('np-prev-btn');
-    const nextBtn = document.getElementById('np-next-btn');
-    let paused = false;
-
     pauseBtn.addEventListener('click', async () => {
       const action = paused ? 'resume' : 'pause';
       await fetch('/transport', {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -88,13 +96,15 @@
     prevBtn.addEventListener('click', async () => {
       await fetch('/transport', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'prev'})});
-      setTimeout(refreshNowPlaying, 500);
+      keepBarVisible();
+      setTimeout(refreshNowPlaying, 1500);
     });
 
     nextBtn.addEventListener('click', async () => {
       await fetch('/transport', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'next'})});
-      setTimeout(refreshNowPlaying, 500);
+      keepBarVisible();
+      setTimeout(refreshNowPlaying, 1500);
     });
 
     window.refreshNowPlaying = refreshNowPlaying;

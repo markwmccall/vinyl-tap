@@ -14,8 +14,8 @@ Items from code review. See commit history for context.
 
 ## Code Quality
 
-- [ ] **Duplicate JS in album.html / track.html** — `writeTag()` and `postAction()` are identical in both templates. Extract to a shared `static/player.js`.
-- [ ] **No structured logging** — No use of Python `logging` module. Hard to debug production issues on the Pi.
+- [x] **Duplicate JS in album.html / track.html** — `writeTag()` and `postAction()` are identical in both templates. Extract to a shared `static/player.js`.
+- [x] **No structured logging** — No use of Python `logging` module. Hard to debug production issues on the Pi.
 
 ---
 

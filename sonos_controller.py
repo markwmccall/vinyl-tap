@@ -127,7 +127,7 @@ def get_now_playing(speaker_ip):
         speaker = soco.SoCo(speaker_ip)
         transport = speaker.get_current_transport_info()
         state = transport.get("current_transport_state", "STOPPED")
-        if state not in ("PLAYING", "PAUSED_PLAYBACK"):
+        if state not in ("PLAYING", "PAUSED_PLAYBACK", "TRANSITIONING"):
             return None
         info = speaker.get_current_track_info()
         if not info.get("title"):

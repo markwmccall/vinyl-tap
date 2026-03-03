@@ -1,3 +1,8 @@
+import logging
+
+log = logging.getLogger(__name__)
+
+
 def _parse_ndef_text(data):
     """Extract text string from NDEF TLV bytes. Returns string or None if blank/unrecognised."""
     if not data or data[0] != 0x03:
@@ -73,12 +78,12 @@ class MockNFC:
 
     def write_tag(self, data):
         """Print what would be written to the physical tag."""
-        print(f"[MockNFC] Would write: {data}")
+        log.info(f"[MockNFC] Would write: {data}")
         return True
 
     def write_url_tag(self, url):
         """Print what URL would be written to the physical tag."""
-        print(f"[MockNFC] Would write URL: {url}")
+        log.info(f"[MockNFC] Would write URL: {url}")
         return True
 
 

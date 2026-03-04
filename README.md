@@ -1,6 +1,6 @@
 # Vinyl Emulator
 
-<img src="static/logo.svg?v=2" width="80" alt="Vinyl Emulator logo">
+<img src="static/logo-v2.svg" width="80" alt="Vinyl Emulator logo">
 
 [![Tests](https://github.com/markwmccall/vinyl-emulator/actions/workflows/tests.yml/badge.svg)](https://github.com/markwmccall/vinyl-emulator/actions/workflows/tests.yml)
 

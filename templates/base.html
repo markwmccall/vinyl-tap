@@ -27,16 +27,23 @@
   </main>
 
   <div id="now-playing-bar" class="now-playing-bar" style="display:none">
-    <img id="np-art" src="" alt="" class="np-art" style="display:none">
-    <div class="np-info">
-      <span id="np-title" class="np-title"></span>
-      <span id="np-artist" class="np-artist"></span>
-      <span id="np-album" class="np-album"></span>
+    <div class="np-main-row">
+      <img id="np-art" src="" alt="" class="np-art" style="display:none">
+      <div class="np-info">
+        <span id="np-title" class="np-title"></span>
+        <span id="np-artist" class="np-artist"></span>
+        <span id="np-album" class="np-album"></span>
+      </div>
+      <div class="np-controls">
+        <button id="np-prev-btn" class="np-btn" title="Previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+        <button id="np-pause-btn" class="np-btn np-btn-primary" title="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+        <button id="np-next-btn" class="np-btn" title="Next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+      </div>
     </div>
-    <div class="np-controls">
-      <button id="np-prev-btn" class="np-btn" title="Previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
-      <button id="np-pause-btn" class="np-btn np-btn-primary" title="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
-      <button id="np-next-btn" class="np-btn" title="Next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+    <div class="np-volume">
+      <span class="np-volume-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg></span>
+      <input type="range" id="np-volume-slider" class="np-volume-slider" min="0" max="100" value="50">
+      <span id="np-volume-display" class="np-volume-display">50</span>
     </div>
   </div>
 
@@ -44,9 +51,94 @@
     const pauseBtn = document.getElementById('np-pause-btn');
     const prevBtn = document.getElementById('np-prev-btn');
     const nextBtn = document.getElementById('np-next-btn');
+    const volumeSlider = document.getElementById('np-volume-slider');
     const SVG_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
     const SVG_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
     let paused = false;
+    let volumeDragging = false;
+    let volumeTimer = null;
+
+    function updateSliderFill(slider) {
+      const pct = (slider.value / slider.max) * 100;
+      slider.style.setProperty('--fill', pct + '%');
+    }
+
+    async function sendVolume(value) {
+      await fetch('/transport', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'volume', value: parseInt(value)})});
+    }
+
+    let volumeStartVal = 50;
+    let volumeStartX = 0;
+    let volumeIsDrag = false;
+
+    function updateVolumeDisplay(val) {
+      const el = document.getElementById('np-volume-display');
+      if (el) el.textContent = Math.round(val);
+    }
+
+    volumeSlider.addEventListener('mousedown', (e) => {
+      volumeDragging = true;
+      volumeIsDrag = false;
+      volumeStartVal = parseInt(volumeSlider.value);
+      volumeStartX = e.clientX;
+    });
+    volumeSlider.addEventListener('touchstart', (e) => {
+      volumeDragging = true;
+      volumeIsDrag = false;
+      volumeStartVal = parseInt(volumeSlider.value);
+      volumeStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!volumeDragging) return;
+      if (Math.abs(e.clientX - volumeStartX) > 3) volumeIsDrag = true;
+    });
+    document.addEventListener('touchmove', (e) => {
+      if (!volumeDragging) return;
+      if (Math.abs(e.touches[0].clientX - volumeStartX) > 3) volumeIsDrag = true;
+    }, { passive: true });
+
+    function applyTapDelta(clientX) {
+      const rect = volumeSlider.getBoundingClientRect();
+      const thumbX = rect.left + (volumeStartVal / volumeSlider.max) * rect.width;
+      const delta = clientX < thumbX ? -1 : 1;
+      const newVal = Math.min(100, Math.max(0, volumeStartVal + delta));
+      volumeSlider.value = newVal;
+      updateSliderFill(volumeSlider);
+      updateVolumeDisplay(newVal);
+      sendVolume(newVal);
+    }
+
+    document.addEventListener('mouseup', (e) => {
+      if (!volumeDragging) return;
+      volumeDragging = false;
+      clearTimeout(volumeTimer);
+      if (!volumeIsDrag) {
+        applyTapDelta(e.clientX);
+      } else {
+        sendVolume(volumeSlider.value);
+      }
+    });
+    document.addEventListener('touchend', (e) => {
+      if (!volumeDragging) return;
+      volumeDragging = false;
+      clearTimeout(volumeTimer);
+      if (!volumeIsDrag) {
+        applyTapDelta(e.changedTouches[0].clientX);
+      } else {
+        sendVolume(volumeSlider.value);
+      }
+    });
+
+    volumeSlider.addEventListener('input', () => {
+      updateSliderFill(volumeSlider);
+      updateVolumeDisplay(volumeSlider.value);
+      if (volumeIsDrag) {
+        clearTimeout(volumeTimer);
+        volumeTimer = setTimeout(() => sendVolume(volumeSlider.value), 300);
+      }
+    });
     let suppressHide = false;
     let suppressHideTimer = null;
 
@@ -92,6 +184,11 @@
         paused = data.paused;
         pauseBtn.innerHTML = paused ? SVG_PLAY : SVG_PAUSE;
         pauseBtn.title = paused ? 'Resume' : 'Pause';
+        if (!volumeDragging && data.volume != null) {
+          volumeSlider.value = data.volume;
+          updateSliderFill(volumeSlider);
+          updateVolumeDisplay(data.volume);
+        }
       } catch (e) {}
     }
 

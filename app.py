@@ -9,7 +9,7 @@ from flask import Flask, abort, jsonify, render_template, request, session
 
 import apple_music
 from nfc_interface import MockNFC, PN532NFC, parse_tag_data
-from sonos_controller import detect_apple_music_sn, get_now_playing, get_speakers, next_track, pause, play_album, prev_track, resume, stop
+from sonos_controller import detect_apple_music_sn, get_now_playing, get_speakers, get_volume, next_track, pause, play_album, prev_track, resume, set_volume, stop
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
@@ -348,6 +348,7 @@ def now_playing():
         if tracks:
             result["album_id"] = tracks[0].get("album_id")
             result["artwork_url"] = tracks[0].get("artwork_url")
+    result["volume"] = get_volume(config["speaker_ip"])
     return jsonify(result)
 
 
@@ -360,7 +361,7 @@ def health():
 def transport():
     data = request.get_json()
     action = data.get("action") if data else None
-    if action not in ("pause", "resume", "stop", "next", "prev"):
+    if action not in ("pause", "resume", "stop", "next", "prev", "volume"):
         return jsonify({"error": "invalid action"}), 400
     config = _load_config()
     name = config.get("speaker_name")
@@ -372,6 +373,11 @@ def transport():
         next_track(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
     elif action == "prev":
         prev_track(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
+    elif action == "volume":
+        value = data.get("value")
+        if value is None or not (0 <= int(value) <= 100):
+            return jsonify({"error": "value must be 0-100"}), 400
+        set_volume(config["speaker_ip"], value, speaker_name=name, config_path=CONFIG_PATH)
     else:
         stop(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
     return jsonify({"status": "ok", "action": action})

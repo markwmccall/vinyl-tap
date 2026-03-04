@@ -573,6 +573,13 @@ class TestNowPlaying:
         assert data["album_id"] == 1440903625
         assert data["artwork_url"] == "https://example.com/600x600bb.jpg"
 
+    def test_includes_volume_in_response(self, client, temp_config):
+        with patch("app.get_now_playing", return_value={
+            "title": "Track", "artist": "Artist", "album": "Album", "track_id": None, "paused": False
+        }), patch("app.get_volume", return_value=55):
+            resp = client.get("/now-playing")
+        assert resp.get_json()["volume"] == 55
+
     def test_returns_playing_false_when_no_speaker(self, client, tmp_path, monkeypatch):
         config_file = tmp_path / "config.json"
         config_file.write_text('{"sn": "3", "speaker_ip": "", "nfc_mode": "mock"}')
@@ -633,6 +640,20 @@ class TestTransport:
         data = resp.get_json()
         assert data["status"] == "ok"
         assert data["action"] == "pause"
+
+    def test_volume_action(self, client, temp_config):
+        with patch("app.set_volume") as mock_set:
+            resp = client.post("/transport", json={"action": "volume", "value": 42})
+        assert resp.status_code == 200
+        mock_set.assert_called_once_with("10.0.0.12", 42, speaker_name="Family Room", config_path=ANY)
+
+    def test_volume_missing_value_returns_400(self, client, temp_config):
+        resp = client.post("/transport", json={"action": "volume"})
+        assert resp.status_code == 400
+
+    def test_volume_out_of_range_returns_400(self, client, temp_config):
+        resp = client.post("/transport", json={"action": "volume", "value": 150})
+        assert resp.status_code == 400
 
 
 class TestPlayTag:

@@ -202,6 +202,24 @@ def prev_track(speaker_ip, speaker_name=None, config_path=None):
             raise
 
 
+def get_volume(speaker_ip):
+    try:
+        return soco.SoCo(speaker_ip).volume
+    except Exception:
+        return None
+
+
+def set_volume(speaker_ip, value, speaker_name=None, config_path=None):
+    try:
+        soco.SoCo(speaker_ip).volume = int(value)
+    except Exception:
+        if speaker_name and config_path:
+            new_ip = _rediscover_speaker(speaker_name, config_path)
+            soco.SoCo(new_ip).volume = int(value)
+        else:
+            raise
+
+
 def _do_play_album(speaker, track_dicts, sn):
     udn = _lookup_apple_music_udn(speaker, sn)
     speaker.clear_queue()

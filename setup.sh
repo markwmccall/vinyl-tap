@@ -21,7 +21,7 @@ echo ""
 # --- System packages ---
 echo "[1/5] Installing system packages..."
 sudo apt-get update -qq
-sudo apt-get install -y python3-pip python3-dev python3-venv git
+sudo apt-get install -y python3-pip python3-dev python3-venv git libxml2-dev libxslt-dev
 
 # --- Enable SPI ---
 echo "[2/5] Enabling SPI interface..."

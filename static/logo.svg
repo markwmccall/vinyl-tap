@@ -1,15 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -7 32 32" width="256" height="256" fill="none">
-  <!-- Disc -->
-  <circle cx="12" cy="12" r="11" fill="#1a1a1a" stroke="white" stroke-width="0.7" stroke-opacity="0.8"/>
-  <!-- Groove wedges (315°/135° axis) -->
-  <path d="M 13.68 5.72 A 6.5 6.5 0 0 1 18.28 10.32 L 20.69 9.67 A 9.0 9.0 0 0 0 14.33 3.31 Z" fill="white"/>
-  <path d="M 10.32 18.28 A 6.5 6.5 0 0 1 5.72 13.68 L 3.31 14.33 A 9.0 9.0 0 0 0 9.67 20.69 Z" fill="white"/>
-  <!-- Label -->
-  <circle cx="12" cy="12" r="4.5" fill="#ff1744"/>
-  <!-- Spindle hole -->
-  <circle cx="12" cy="12" r="1.8" fill="#111"/>
-  <!-- NFC arcs (same axis, 290°–340°) -->
-  <path d="M 16.28 0.25 A 12.5 12.5 0 0 1 23.75 7.72 L 25.16 7.21 A 14.0 14.0 0 0 0 16.79 -1.16 Z" fill="white" fill-opacity="0.95"/>
-  <path d="M 17.13 -2.1 A 15.0 15.0 0 0 1 26.1 6.87 L 27.5 6.36 A 16.5 16.5 0 0 0 17.64 -3.5 Z" fill="white" fill-opacity="0.85"/>
-  <path d="M 17.99 -4.44 A 17.5 17.5 0 0 1 28.44 6.01 L 29.85 5.5 A 19.0 19.0 0 0 0 18.5 -5.85 Z" fill="white" fill-opacity="0.75"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="256" height="256" fill="none">
+  <g transform="translate(2,7)">
+    <!-- Disc -->
+    <circle cx="12" cy="12" r="11" fill="#1a1a1a" stroke="white" stroke-width="0.7" stroke-opacity="0.8"/>
+    <!-- Groove wedges (315°/135° axis) -->
+    <path d="M 13.68 5.72 A 6.5 6.5 0 0 1 18.28 10.32 L 20.69 9.67 A 9.0 9.0 0 0 0 14.33 3.31 Z" fill="white"/>
+    <path d="M 10.32 18.28 A 6.5 6.5 0 0 1 5.72 13.68 L 3.31 14.33 A 9.0 9.0 0 0 0 9.67 20.69 Z" fill="white"/>
+    <!-- Label -->
+    <circle cx="12" cy="12" r="4.5" fill="#ff1744"/>
+    <!-- Spindle hole -->
+    <circle cx="12" cy="12" r="1.8" fill="#111"/>
+    <!-- NFC arcs (same axis, 290°–340°) -->
+    <path d="M 16.28 0.25 A 12.5 12.5 0 0 1 23.75 7.72 L 25.16 7.21 A 14.0 14.0 0 0 0 16.79 -1.16 Z" fill="white" fill-opacity="0.95"/>
+    <path d="M 17.13 -2.1 A 15.0 15.0 0 0 1 26.1 6.87 L 27.5 6.36 A 16.5 16.5 0 0 0 17.64 -3.5 Z" fill="white" fill-opacity="0.85"/>
+    <path d="M 17.99 -4.44 A 17.5 17.5 0 0 1 28.44 6.01 L 29.85 5.5 A 19.0 19.0 0 0 0 18.5 -5.85 Z" fill="white" fill-opacity="0.75"/>
+  </g>
 </svg>

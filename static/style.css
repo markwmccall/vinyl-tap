@@ -561,6 +561,6 @@ a.track-name:hover { color: var(--text); text-decoration: underline; }
 .tag-type-badge { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.4rem; border-radius: var(--radius-sm); flex-shrink: 0; }
 .tag-type-album { background: var(--badge-album-bg); color: var(--badge-album-text); }
 .tag-type-track { background: var(--badge-track-bg); color: var(--badge-track-text); }
-.tag-delete-btn { background: none; border: none; color: var(--border-strong); font-size: 1rem; cursor: pointer; flex-shrink: 0; padding: 0.25rem; line-height: 1; }
+.tag-delete-btn { background: none; border: none; color: var(--text-3); font-size: 1rem; cursor: pointer; flex-shrink: 0; padding: 0.25rem; line-height: 1; }
 .tag-delete-btn:hover { color: var(--destructive-text); }
 main { padding-bottom: 5rem; }

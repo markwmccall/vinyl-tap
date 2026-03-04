@@ -73,6 +73,13 @@ sudo systemctl enable vinyl-player vinyl-web
 sudo systemctl restart vinyl-player vinyl-web
 echo "      Services installed, enabled, and restarted"
 
+# Allow the web UI to start/stop vinyl-player without a password prompt
+SYSTEMCTL="$(which systemctl)"
+echo "$USERNAME ALL=(ALL) NOPASSWD: $SYSTEMCTL start vinyl-player, $SYSTEMCTL stop vinyl-player" \
+    | sudo tee /etc/sudoers.d/vinyl-emulator > /dev/null
+sudo chmod 0440 /etc/sudoers.d/vinyl-emulator
+echo "      Sudoers entry written for player control"
+
 # --- Done ---
 echo ""
 echo "=== Setup complete ==="

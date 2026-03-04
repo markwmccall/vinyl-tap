@@ -28,6 +28,9 @@ echo "[2/5] Enabling SPI interface..."
 sudo raspi-config nonint do_spi 0
 echo "      SPI enabled (takes effect after reboot)"
 
+# --- Stop services before touching the venv ---
+sudo systemctl stop vinyl-player vinyl-web 2>/dev/null || true
+
 # --- Python dependencies ---
 echo "[3/5] Creating venv and installing Python dependencies..."
 python3 -m venv --system-site-packages "$REPO_DIR/.venv"

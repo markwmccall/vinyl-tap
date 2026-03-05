@@ -1,9 +1,9 @@
 import argparse
 import json
+import logging
 import os
 import secrets
-import subprocess
-import time
+import threading
 from datetime import datetime
 
 from flask import Flask, abort, jsonify, render_template, request, session
@@ -18,6 +18,12 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 TAGS_PATH = os.path.join(os.path.dirname(__file__), "tags.json")
 
+log = logging.getLogger(__name__)
+
+# Shared NFC device and lock used by the background polling thread and web routes.
+_nfc_lock = threading.Lock()
+_nfc = None
+
 
 def _load_config():
     with open(CONFIG_PATH) as f:
@@ -28,25 +34,6 @@ def _load_config():
         raise RuntimeError(f"Missing required config fields: {', '.join(missing)}")
     return config
 
-
-def _stop_player_if_active():
-    """Stop vinyl-player if it is running. Returns True if it was stopped."""
-    result = subprocess.run(
-        ["systemctl", "is-active", "vinyl-player"],
-        capture_output=True, text=True
-    )
-    if result.stdout.strip() == "active":
-        subprocess.run(["sudo", "systemctl", "stop", "vinyl-player"], check=False)
-        # Give the PN532 time to finish its in-progress ReadPassiveTarget command
-        # before we try to re-initialise the I2C device. Without this the probe
-        # hits the device while it is still busy and raises ValueError.
-        time.sleep(1)
-        return True
-    return False
-
-
-def _start_player():
-    subprocess.run(["sudo", "systemctl", "start", "vinyl-player"], check=False)
 
 
 def _load_tags():
@@ -90,6 +77,63 @@ def _make_nfc(config):
                 "run setup.sh on a Raspberry Pi to install them"
             )
     return MockNFC()
+
+
+def _nfc_loop(config_path):
+    """Background NFC polling loop with debounce. Runs in a daemon thread.
+
+    Holds _nfc_lock only during the I2C read (up to 0.5 s). Releases it
+    before calling play_album so web routes never wait on a Sonos network call.
+    """
+    last_tag = None
+    while True:
+        try:
+            with _nfc_lock:
+                tag_data = _nfc.read_tag()
+        except Exception as e:
+            log.error(f"NFC read error: {e}")
+            continue
+
+        if tag_data is None:
+            last_tag = None
+            continue
+
+        if tag_data == last_tag:
+            continue  # same card still present — ignore
+
+        last_tag = tag_data
+        try:
+            tag = parse_tag_data(tag_data)
+            tracks = (apple_music.get_track(tag["id"]) if tag["type"] == "track"
+                      else apple_music.get_album_tracks(tag["id"]))
+            config = _load_config()
+            play_album(config["speaker_ip"], tracks, config["sn"],
+                       speaker_name=config.get("speaker_name"), config_path=config_path)
+            log.info(f"Playing {tag['type']} {tag['id']}")
+        except Exception as e:
+            log.error(f"NFC play error: {e}")
+
+
+def _start_nfc_thread(config_path):
+    """Initialise the shared NFC device and start the background polling thread.
+
+    Only active in pn532 mode. No-op in mock mode so local dev is unaffected.
+    """
+    global _nfc
+    try:
+        config = _load_config()
+    except Exception:
+        return
+    if config.get("nfc_mode") != "pn532":
+        return
+    try:
+        _nfc = PN532NFC()
+    except Exception as e:
+        log.error(f"Failed to initialise PN532: {e}")
+        return
+    t = threading.Thread(target=_nfc_loop, args=(config_path,), daemon=True)
+    t.start()
+    log.info("NFC thread started")
 
 
 def _format_existing_tag(tag_string):
@@ -197,54 +241,74 @@ def write_tag():
     if not data or ("track_id" not in data and "album_id" not in data):
         return jsonify({"error": "album_id or track_id required"}), 400
     config = _load_config()
-    is_pn532 = config.get("nfc_mode") == "pn532"
-    player_was_running = _stop_player_if_active() if is_pn532 else False
-    try:
+    tag_data = (f"apple:track:{data['track_id']}" if "track_id" in data
+                else f"apple:{data['album_id']}")
+    force = data.get("force", False)
+
+    if config.get("nfc_mode") == "pn532":
+        if _nfc is None:
+            return jsonify({"error": "NFC not initialised"}), 503
+        acquired = _nfc_lock.acquire(timeout=2.0)
+        if not acquired:
+            return jsonify({"error": "NFC busy, try again"}), 503
+        try:
+            if not force:
+                existing = _nfc.read_tag()
+                if existing:
+                    return jsonify({
+                        "status": "confirm",
+                        "existing": existing,
+                        "existing_display": _format_existing_tag(existing),
+                    })
+            try:
+                _nfc.write_tag(tag_data)
+            except IOError as e:
+                return jsonify({"error": str(e)}), 409
+        finally:
+            _nfc_lock.release()
+    else:
         try:
             nfc = _make_nfc(config)
         except RuntimeError as e:
             return jsonify({"error": str(e)}), 503
-        tag_data = (f"apple:track:{data['track_id']}" if "track_id" in data
-                    else f"apple:{data['album_id']}")
-        force = data.get("force", False)
-
-        # Read-before-write check (pn532 mode only; mock mode always writes immediately)
-        if is_pn532 and not force:
-            existing = nfc.read_tag()
-            if existing:
-                return jsonify({
-                    "status": "confirm",
-                    "existing": existing,
-                    "existing_display": _format_existing_tag(existing),
-                })
-
         try:
             nfc.write_tag(tag_data)
         except IOError as e:
             return jsonify({"error": str(e)}), 409
 
-        try:
-            _do_record_tag(tag_data, data)
-        except Exception:
-            pass
-        return jsonify({"status": "ok", "written": tag_data})
-    finally:
-        if player_was_running:
-            _start_player()
+    try:
+        _do_record_tag(tag_data, data)
+    except Exception:
+        pass
+    return jsonify({"status": "ok", "written": tag_data})
 
 
 @app.route("/write-url-tag", methods=["POST"])
 def write_url_tag():
     url = request.host_url.rstrip("/")
     config = _load_config()
-    try:
-        nfc = _make_nfc(config)
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 503
-    try:
-        nfc.write_url_tag(url)
-    except NotImplementedError as e:
-        return jsonify({"error": str(e)}), 501
+    if config.get("nfc_mode") == "pn532":
+        if _nfc is None:
+            return jsonify({"error": "NFC not initialised"}), 503
+        acquired = _nfc_lock.acquire(timeout=2.0)
+        if not acquired:
+            return jsonify({"error": "NFC busy, try again"}), 503
+        try:
+            try:
+                _nfc.write_url_tag(url)
+            except NotImplementedError as e:
+                return jsonify({"error": str(e)}), 501
+        finally:
+            _nfc_lock.release()
+    else:
+        try:
+            nfc = _make_nfc(config)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 503
+        try:
+            nfc.write_url_tag(url)
+        except NotImplementedError as e:
+            return jsonify({"error": str(e)}), 501
     return jsonify({"status": "ok", "written": url})
 
 
@@ -296,18 +360,25 @@ def read_tag():
     config = _load_config()
     tag_string = request.args.get("tag")
     if tag_string is None:
-        is_pn532 = config.get("nfc_mode") == "pn532"
-        player_was_running = _stop_player_if_active() if is_pn532 else False
-        try:
+        if config.get("nfc_mode") == "pn532":
+            if _nfc is None:
+                return jsonify({"tag_string": None, "tag_type": None, "content_id": None,
+                                "album": None, "error": "NFC not initialised"})
+            acquired = _nfc_lock.acquire(timeout=2.0)
+            if not acquired:
+                return jsonify({"tag_string": None, "tag_type": None, "content_id": None,
+                                "album": None, "error": "NFC busy, try again"})
+            try:
+                tag_string = _nfc.read_tag()
+            finally:
+                _nfc_lock.release()
+        else:
             try:
                 nfc = _make_nfc(config)
             except RuntimeError as e:
                 return jsonify({"tag_string": None, "tag_type": None, "content_id": None,
                                 "album": None, "error": str(e)})
             tag_string = nfc.read_tag()
-        finally:
-            if player_was_running:
-                _start_player()
     try:
         tag = parse_tag_data(tag_string)
     except ValueError as e:
@@ -326,24 +397,6 @@ def read_tag():
     return jsonify({"tag_string": tag_string, "tag_type": tag_type, "content_id": content_id,
                     "album": album, "error": None})
 
-
-@app.route("/player/status")
-def player_status():
-    result = subprocess.run(
-        ["systemctl", "is-active", "vinyl-player"],
-        capture_output=True, text=True
-    )
-    return jsonify({"status": result.stdout.strip()})
-
-
-@app.route("/player/control", methods=["POST"])
-def player_control():
-    data = request.get_json()
-    action = data.get("action") if data else None
-    if action not in ("stop", "start"):
-        return jsonify({"error": "invalid action"}), 400
-    subprocess.run(["sudo", "systemctl", action, "vinyl-player"], check=False)
-    return jsonify({"status": "ok", "action": action})
 
 
 @app.route("/detect-sn")
@@ -471,4 +524,5 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1",
                         help="Host to bind to (use 0.0.0.0 for Pi)")
     args = parser.parse_args()
+    _start_nfc_thread(CONFIG_PATH)
     app.run(host=args.host, port=5000)

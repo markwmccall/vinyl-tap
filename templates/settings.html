@@ -5,19 +5,7 @@
 <div class="settings-page">
   <h1>Settings</h1>
 
-  {% if config.nfc_mode == 'pn532' %}
-  <div class="player-control-section">
-    <h2>Player</h2>
-    <p>Stop the player before writing tags. Restart it when done.</p>
-    <div class="player-status-row">
-      <span id="player-status-badge" class="player-badge">Checking…</span>
-      <button id="player-stop-btn" type="button" disabled>Stop Player</button>
-      <button id="player-start-btn" type="button" disabled>Start Player</button>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if saved %}
+{% if saved %}
   <div class="banner success">Settings saved.</div>
   {% endif %}
 
@@ -137,45 +125,6 @@
       speakerNameInput.value = selected.name;
     }
   });
-
-  // Player controls (pn532 mode only)
-  const statusBadge = document.getElementById('player-status-badge');
-  const stopBtn = document.getElementById('player-stop-btn');
-  const startBtn = document.getElementById('player-start-btn');
-
-  if (statusBadge) {
-    async function fetchPlayerStatus() {
-      try {
-        const resp = await fetch('/player/status');
-        const data = await resp.json();
-        const active = data.status === 'active';
-        statusBadge.textContent = active ? 'Running' : 'Stopped';
-        statusBadge.className = 'player-badge ' + (active ? 'badge-running' : 'badge-stopped');
-        stopBtn.disabled = !active;
-        startBtn.disabled = active;
-      } catch (e) {
-        statusBadge.textContent = 'Unknown';
-        statusBadge.className = 'player-badge badge-unknown';
-      }
-    }
-
-    async function controlPlayer(action) {
-      stopBtn.disabled = true;
-      startBtn.disabled = true;
-      statusBadge.textContent = action === 'stop' ? 'Stopping…' : 'Starting…';
-      await fetch('/player/control', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({action}),
-      });
-      // Give systemd a moment then re-check
-      setTimeout(fetchPlayerStatus, 1500);
-    }
-
-    stopBtn.addEventListener('click', () => controlPlayer('stop'));
-    startBtn.addEventListener('click', () => controlPlayer('start'));
-    fetchPlayerStatus();
-  }
 
   const writeUrlBtn = document.getElementById('write-url-btn');
   const writeUrlStatus = document.getElementById('write-url-status');

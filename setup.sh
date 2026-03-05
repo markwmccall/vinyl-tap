@@ -29,8 +29,8 @@ sudo raspi-config nonint do_i2c 0
 sudo usermod -a -G i2c "$USERNAME"
 echo "      I2C enabled and $USERNAME added to i2c group (takes effect after reboot)"
 
-# --- Stop services before touching the venv ---
-sudo systemctl stop vinyl-player vinyl-web 2>/dev/null || true
+# --- Stop service before touching the venv ---
+sudo systemctl stop vinyl-web 2>/dev/null || true
 
 # --- Python dependencies ---
 echo "[3/5] Creating venv and installing Python dependencies..."
@@ -60,26 +60,18 @@ fi
 # --- systemd services ---
 echo "[5/5] Installing systemd services..."
 
-# Substitute actual username and repo path into service files
-sed "s|/home/pi/vinyl-emulator|$REPO_DIR|g; s|User=pi|User=$USERNAME|g" \
-    "$REPO_DIR/etc/vinyl-player.service" \
-    | sudo tee /etc/systemd/system/vinyl-player.service > /dev/null
-
+# Substitute actual username and repo path into service file
 sed "s|/home/pi/vinyl-emulator|$REPO_DIR|g; s|User=pi|User=$USERNAME|g" \
     "$REPO_DIR/etc/vinyl-web.service" \
     | sudo tee /etc/systemd/system/vinyl-web.service > /dev/null
 
 sudo systemctl daemon-reload
-sudo systemctl enable vinyl-player vinyl-web
-sudo systemctl restart vinyl-player vinyl-web
-echo "      Services installed, enabled, and restarted"
+sudo systemctl enable vinyl-web
+sudo systemctl restart vinyl-web
+echo "      Service installed, enabled, and restarted"
 
-# Allow the web UI to start/stop vinyl-player without a password prompt
-SYSTEMCTL="$(which systemctl)"
-echo "$USERNAME ALL=(ALL) NOPASSWD: $SYSTEMCTL start vinyl-player, $SYSTEMCTL stop vinyl-player" \
-    | sudo tee /etc/sudoers.d/vinyl-emulator > /dev/null
-sudo chmod 0440 /etc/sudoers.d/vinyl-emulator
-echo "      Sudoers entry written for player control"
+# Remove obsolete sudoers entry if present
+sudo rm -f /etc/sudoers.d/vinyl-emulator
 
 # --- Done ---
 echo ""

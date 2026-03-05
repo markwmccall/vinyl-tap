@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import secrets
+import signal
+import sys
 import threading
 from datetime import datetime
 
@@ -522,7 +524,20 @@ def verify():
     return render_template("verify.html", nfc_mode=config.get("nfc_mode", "mock"))
 
 
+def _sigterm_handler(signum, frame):
+    """Wait for any in-progress NFC I2C operation to finish before exiting.
+
+    Without this, SIGTERM (from `systemctl restart`) can kill the process
+    mid-I2C-transfer, leaving the PN532 clock-stretching and the bus hung.
+    The next start then fails with 'No I2C device at address: 0x24'.
+    """
+    _nfc_lock.acquire(timeout=2.0)
+    sys.exit(0)
+
+
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    signal.signal(signal.SIGTERM, _sigterm_handler)
     parser = argparse.ArgumentParser(description="Vinyl emulator web UI")
     parser.add_argument("--host", default="127.0.0.1",
                         help="Host to bind to (use 0.0.0.0 for Pi)")

@@ -564,3 +564,7 @@ a.track-name:hover { color: var(--text); text-decoration: underline; }
 .tag-delete-btn { background: none; border: none; color: var(--text-3); font-size: 1rem; cursor: pointer; flex-shrink: 0; padding: 0.25rem; line-height: 1; }
 .tag-delete-btn:hover { color: var(--destructive-text); }
 main { padding-bottom: 5rem; }
+.logs-page h1 { font-size: 1.6rem; margin-bottom: 0.75rem; }
+.logs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.logs-header h1 { margin-bottom: 0; }
+.log-output { background: var(--surface-input); border: 1px solid var(--border-subtle); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 0.75rem; line-height: 1.5; overflow-x: auto; overflow-y: auto; max-height: 70vh; white-space: pre; color: var(--text-2); }

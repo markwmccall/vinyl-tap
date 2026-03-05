@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %} - Logs{% endblock %}
+
+{% block content %}
+<div class="logs-page">
+  <div class="logs-header">
+    <h1>Server Logs</h1>
+    <button id="refresh-btn" type="button">Refresh</button>
+  </div>
+
+  {% if log_output is none %}
+    <p class="hint">Logs are only available when running under systemd on the Raspberry Pi.<br>
+    Use <code>sudo journalctl -u vinyl-web -f</code> in a terminal to follow logs.</p>
+  {% else %}
+    <pre id="log-output" class="log-output">{{ log_output }}</pre>
+  {% endif %}
+</div>
+
+<script>
+  document.getElementById('refresh-btn').addEventListener('click', () => {
+    window.location.reload();
+  });
+
+  const logOutput = document.getElementById('log-output');
+  if (logOutput) {
+    logOutput.scrollTop = logOutput.scrollHeight;
+  }
+</script>
+{% endblock %}

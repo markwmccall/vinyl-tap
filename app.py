@@ -4,6 +4,7 @@ import logging
 import os
 import secrets
 import signal
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -535,6 +536,19 @@ def collection_clear():
 def verify():
     config = _load_config()
     return render_template("verify.html", nfc_mode=config.get("nfc_mode", "mock"))
+
+
+@app.route("/logs")
+def logs():
+    try:
+        result = subprocess.run(
+            ["journalctl", "-u", "vinyl-web", "-n", "200", "--no-pager", "--output=short-iso"],
+            capture_output=True, text=True, timeout=5,
+        )
+        log_output = result.stdout or "(no log output)"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        log_output = None
+    return render_template("logs.html", log_output=log_output)
 
 
 def _sigterm_handler(signum, frame):

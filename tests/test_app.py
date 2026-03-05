@@ -572,6 +572,26 @@ class TestHealth:
         assert resp.get_json()["status"] == "ok"
 
 
+class TestLogs:
+    def test_returns_200(self, client):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.stdout = "Mar 05 10:00:00 vinyl-pi vinyl-web[123]: INFO started\n"
+            resp = client.get("/logs")
+        assert resp.status_code == 200
+
+    def test_shows_log_output(self, client):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.stdout = "INFO started\n"
+            resp = client.get("/logs")
+        assert b"INFO started" in resp.data
+
+    def test_no_journalctl_shows_fallback(self, client):
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            resp = client.get("/logs")
+        assert resp.status_code == 200
+        assert b"only available when running under systemd" in resp.data
+
+
 class TestTransport:
     def test_pause_action(self, client, temp_config):
         with patch("app.pause") as mock_pause:

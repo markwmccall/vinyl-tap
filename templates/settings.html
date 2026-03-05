@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %} — Settings{% endblock %}
+{% block title %} - Settings{% endblock %}
 
 {% block content %}
 <div class="settings-page">
@@ -21,7 +21,7 @@
       <input type="hidden" id="speaker_name" name="speaker_name"
              value="{{ config.speaker_name or '' }}">
       <select id="speaker-select" style="display:none">
-        <option value="">— select a speaker —</option>
+        <option value="">- select a speaker -</option>
       </select>
       <span id="discover-status" class="hint">
         {%- if config.speaker_name %} Current: {{ config.speaker_name }}{% endif %}
@@ -84,7 +84,7 @@
         discoverBtn.disabled = false;
         return;
       }
-      speakerSelect.innerHTML = '<option value="">— select a speaker —</option>' +
+      speakerSelect.innerHTML = '<option value="">- select a speaker -</option>' +
         discoveredSpeakers.map(s => `<option value="${s.ip}">${s.name} (${s.ip})</option>`).join('');
       speakerSelect.style.display = 'block';
       discoverBtn.disabled = false;
@@ -110,7 +110,7 @@
         snInput.value = data.sn;
         detectSnStatus.textContent = `Detected: ${data.sn}`;
       } else {
-        detectSnStatus.textContent = data.error || 'Not found — enter 3 or 5 manually';
+        detectSnStatus.textContent = data.error || 'Not found - enter 3 or 5 manually';
       }
     } catch (e) {
       detectSnStatus.textContent = 'Detection failed.';
@@ -144,7 +144,7 @@
         writeUrlStatus.className = 'hint error';
       }
     } catch (e) {
-      writeUrlStatus.textContent = 'Error — check the console.';
+      writeUrlStatus.textContent = 'Error - check the console.';
       writeUrlStatus.className = 'hint error';
     }
     writeUrlBtn.disabled = false;

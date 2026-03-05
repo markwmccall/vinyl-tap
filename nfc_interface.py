@@ -70,7 +70,7 @@ def parse_tag_data(tag_string):
 
 
 class MockNFC:
-    """Mac/testing NFC implementation — reads from stdin, writes to stdout."""
+    """Mac/testing NFC implementation - reads from stdin, writes to stdout."""
 
     def read_tag(self):
         """Block until the user types a tag string and presses Enter."""
@@ -104,7 +104,7 @@ class PN532NFC:
         if uid is None:
             return None
         data = bytearray()
-        for block in range(4, 16):  # up to 48 bytes — sufficient for NTAG213 NDEF
+        for block in range(4, 16):  # up to 48 bytes - sufficient for NTAG213 NDEF
             b = self._pn532.ntag2xx_read_block(block)
             if b is None:
                 break

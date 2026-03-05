@@ -8,7 +8,7 @@
 
 Tap an NFC card → an album or song plays on your Sonos speaker.
 
-Inspired by [Mark Hank's Sonos/Spotify Vinyl Emulator](https://www.hackster.io/mark-hank/sonos-spotify-vinyl-emulator-3be63d), this project adapts the concept for **Apple Music** and adds a full web UI for searching, writing, and verifying tags — no terminal required after initial setup.
+Inspired by [Mark Hank's Sonos/Spotify Vinyl Emulator](https://www.hackster.io/mark-hank/sonos-spotify-vinyl-emulator-3be63d), this project adapts the concept for **Apple Music** and adds a full web UI for searching, writing, and verifying tags - no terminal required after initial setup.
 
 ---
 
@@ -29,7 +29,7 @@ A Flask web app running on the same Pi lets you:
 | Item | Notes | Approx. Price |
 |------|-------|---------------|
 | **Raspberry Pi Zero 2 W** (with headers pre-soldered) | Compact, WiFi built-in. Pi 3B+ also works. | $15 |
-| **Waveshare PN532 NFC HAT** | Plugs directly onto the Pi GPIO — no wiring needed. Search "Waveshare PN532 NFC HAT Raspberry Pi". | $18–22 |
+| **Waveshare PN532 NFC HAT** | Plugs directly onto the Pi GPIO - no wiring needed. Search "Waveshare PN532 NFC HAT Raspberry Pi". | $18–22 |
 | **microSD card** (16 GB+, Class 10) | For Raspberry Pi OS Lite (headless) | $8–12 |
 | **Raspberry Pi power supply** (5V/2.5A USB-C) | Official Pi supply recommended | $8–12 |
 | **NTAG213 NFC cards or stickers** (25–50 pack) | One per album/song. 144-byte capacity is plenty. | $10–15 |
@@ -53,7 +53,7 @@ Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/). Select **
 
 ### 2. Assemble the hardware
 
-Attach the PN532 NFC HAT to the Pi's 40-pin GPIO header. Before powering on, set the HAT's interface switches to **I2C** — refer to the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT) for the exact switch positions.
+Attach the PN532 NFC HAT to the Pi's 40-pin GPIO header. Before powering on, set the HAT's interface switches to **I2C** - refer to the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT) for the exact switch positions.
 
 Insert the SD card and power on. Wait about 60 seconds, then SSH in:
 
@@ -86,9 +86,9 @@ chmod +x setup.sh && ./setup.sh
 - Creates `config.json` with `nfc_mode=pn532`
 - Installs and enables the `vinyl-web` systemd service
 
-It will prompt you to reboot at the end — I2C requires a reboot to take effect.
+It will prompt you to reboot at the end - I2C requires a reboot to take effect.
 
-> **Note for Pi Zero 2 W users:** The first run compiles `lxml` (a Sonos dependency) from source, which can take 10–20 minutes on the Zero's ARM CPU. This is a one-time cost — subsequent runs are fast.
+> **Note for Pi Zero 2 W users:** The first run compiles `lxml` (a Sonos dependency) from source, which can take 10–20 minutes on the Zero's ARM CPU. This is a one-time cost - subsequent runs are fast.
 
 ### 5. Configure
 
@@ -106,7 +106,7 @@ git pull
 ./setup.sh
 ```
 
-`setup.sh` is safe to re-run — it skips `config.json` if it already exists and restarts services when done.
+`setup.sh` is safe to re-run - it skips `config.json` if it already exists and restarts services when done.
 
 ---
 
@@ -119,9 +119,9 @@ git pull
 
 **HAT not detected by the test script**
 - Confirm the interface switches on the HAT are set to I2C (not SPI or UART)
-- Check the HAT is firmly seated — all 40 pins engaged
+- Check the HAT is firmly seated - all 40 pins engaged
 - I2C must be enabled: `sudo raspi-config` → Interface Options → I2C
-- Verify with `sudo i2cdetect -y 1` — PN532 should appear at address `0x24`
+- Verify with `sudo i2cdetect -y 1` - PN532 should appear at address `0x24`
 
 **Music doesn't play after tapping a card**
 - Check `sudo systemctl status vinyl-web` for errors
@@ -134,7 +134,7 @@ git pull
 - Save the value and test with Play Now
 
 **Speaker IP keeps changing**
-- This is handled automatically — the system stores your speaker's room name and rediscovers it if the IP changes after a router reboot
+- This is handled automatically - the system stores your speaker's room name and rediscovers it if the IP changes after a router reboot
 
 ---
 
@@ -155,7 +155,7 @@ python3 app.py                        # binds to 127.0.0.1:5000
 | Key | Description |
 |-----|-------------|
 | `speaker_ip` | IP address of your Sonos speaker. Use the Discover button in Settings to find it. |
-| `sn` | Apple Music service number assigned by Sonos — identifies which Apple Music account is linked. Use the **Detect** button in Settings to find it automatically (requires at least one Apple Music favorite saved in the Sonos app). If detection finds nothing, try small numbers like `3` or `5`. To confirm the value is correct, save and try playing an album or track. |
+| `sn` | Apple Music service number assigned by Sonos - identifies which Apple Music account is linked. Use the **Detect** button in Settings to find it automatically (requires at least one Apple Music favorite saved in the Sonos app). If detection finds nothing, try small numbers like `3` or `5`. To confirm the value is correct, save and try playing an album or track. |
 | `nfc_mode` | `mock` for development (reads tag strings from stdin), `pn532` for Raspberry Pi with the Waveshare HAT. |
 
 ---
@@ -170,7 +170,7 @@ python3 app.py --host 0.0.0.0         # accessible from other devices on the net
 
 Open `http://localhost:5000` (or `http://vinyl-pi.local:5000` from your phone).
 
-> **Security note:** The web UI has no authentication. It is intended for use on a trusted home network only — do not expose port 5000 to the internet.
+> **Security note:** The web UI has no authentication. It is intended for use on a trusted home network only - do not expose port 5000 to the internet.
 
 **Player CLI (testing/debugging):**
 ```bash
@@ -213,7 +213,7 @@ Tags are written as NDEF text records. NTAG213 cards (144 bytes) are more than l
 
 ## iPhone NFC shortcut
 
-Write `http://vinyl-pi.local:5000` as a URL record on a spare NTAG213 sticker and stick it on the Pi enclosure. Tapping it with an iPhone opens Safari directly to the web UI — no app needed.
+Write `http://vinyl-pi.local:5000` as a URL record on a spare NTAG213 sticker and stick it on the Pi enclosure. Tapping it with an iPhone opens Safari directly to the web UI - no app needed.
 
 ---
 
@@ -227,7 +227,7 @@ sonos_controller.py Sonos SOAP/UPnP: queue and play tracks via SoCo
 nfc_interface.py    NFC abstraction: MockNFC (stdin), PN532NFC (Pi)
 setup.sh            One-shot Pi setup script
 etc/                systemd service file templates
-config.json         Runtime config (speaker IP, sn, NFC mode) — not committed
+config.json         Runtime config (speaker IP, sn, NFC mode) - not committed
 templates/          Jinja2 HTML templates
 static/             CSS
 tests/              pytest test suite

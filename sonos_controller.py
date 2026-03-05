@@ -17,7 +17,7 @@ def _rediscover_speaker(speaker_name, config_path):
     """Find speaker by room name via multicast discovery, update speaker_ip in
     config.json, and return the new IP address.
 
-    Called automatically when a Sonos operation fails — handles the case where
+    Called automatically when a Sonos operation fails - handles the case where
     DHCP assigned a new IP to the speaker since it was last saved in config.
     """
     devices = soco.discover() or set()

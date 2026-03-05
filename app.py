@@ -76,7 +76,7 @@ def _make_nfc(config):
             return PN532NFC()
         except ImportError:
             raise RuntimeError(
-                "PN532 hardware libraries not installed — "
+                "PN532 hardware libraries not installed - "
                 "run setup.sh on a Raspberry Pi to install them"
             )
     return MockNFC()
@@ -102,7 +102,7 @@ def _nfc_loop(config_path):
             continue
 
         if tag_data == _nfc_last_tag:
-            continue  # same card still present — ignore
+            continue  # same card still present - ignore
 
         _nfc_last_tag = tag_data
         try:
@@ -266,7 +266,7 @@ def write_tag():
                 _nfc.write_tag(tag_data)
             except IOError as e:
                 if pre_read is None:
-                    return jsonify({"error": "No tag present — place a card on the reader"}), 409
+                    return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
         finally:
             _nfc_lock.release()
@@ -305,7 +305,7 @@ def write_url_tag():
                 return jsonify({"error": str(e)}), 501
             except IOError as e:
                 if pre_read is None:
-                    return jsonify({"error": "No tag present — place a card on the reader"}), 409
+                    return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
         finally:
             _nfc_lock.release()
@@ -421,7 +421,7 @@ def detect_sn():
         return jsonify({"error": "no speaker configured"}), 400
     sn = detect_apple_music_sn(speaker_ip)
     if sn is None:
-        return jsonify({"error": "No Apple Music favorites found in Sonos — enter 3 or 5 manually"}), 404
+        return jsonify({"error": "No Apple Music favorites found in Sonos - enter 3 or 5 manually"}), 404
     return jsonify({"sn": sn})
 
 
@@ -451,7 +451,7 @@ def now_playing():
                 result["album_id"] = tracks[0].get("album_id")
                 result["artwork_url"] = tracks[0].get("artwork_url")
         except Exception:
-            pass  # transient network error — return what we have
+            pass  # transient network error - return what we have
     result["volume"] = get_volume(config["speaker_ip"])
     return jsonify(result)
 

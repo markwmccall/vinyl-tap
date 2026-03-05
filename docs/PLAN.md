@@ -1,4 +1,4 @@
-# Apple Music Vinyl Emulator — Implementation Plan
+# Apple Music Vinyl Emulator - Implementation Plan
 
 ## Status
 
@@ -16,7 +16,7 @@
 ---
 
 ## Context
-Build a physical vinyl emulator: placing an NFC card on a reader triggers that album or song to play on Sonos via Apple Music. Hardware is a Raspberry Pi Zero 2 W + Waveshare PN532 NFC HAT + NTAG213 tags. All coding and testing happens on Mac first using emulated NFC — hardware is only introduced at Phase 4.
+Build a physical vinyl emulator: placing an NFC card on a reader triggers that album or song to play on Sonos via Apple Music. Hardware is a Raspberry Pi Zero 2 W + Waveshare PN532 NFC HAT + NTAG213 tags. All coding and testing happens on Mac first using emulated NFC - hardware is only introduced at Phase 4.
 
 ## Development Approach: Test Driven Development (TDD)
 Write a failing test first, implement the minimum code to make it pass, repeat. This applies to all core modules. The web UI uses Flask's test client for route testing.
@@ -31,13 +31,13 @@ Test infrastructure:
 ---
 
 ## Confirmed Technical Facts (from prototype testing)
-- `sn=3` — account-specific Sonos/Apple Music service number, confirmed stable
-- Album URI format (`x-rincon-cpcontainer`) fails with UPnP Error 714 — confirmed dead end, not a config issue
+- `sn=3` - account-specific Sonos/Apple Music service number, confirmed stable
+- Album URI format (`x-rincon-cpcontainer`) fails with UPnP Error 714 - confirmed dead end, not a config issue
 - Working track URI: `x-sonos-http:song%3a{track_id}.mp4?sid=204&flags=8232&sn={sn}` (purchased/library tracks)
   - `flags=8232` for purchased/library tracks; `flags=73768` for streaming-only tracks
-  - `%3a` is percent-encoded `:` — must be encoded in the URI
+  - `%3a` is percent-encoded `:` - must be encoded in the URI
   - Sonos replaces this URI with `x-sonosapi-hls-static:song%3a{id}?...` in the stored queue (HLS delivery)
-- Album playback requires queuing individual tracks — confirmed by inspecting Sonos queue during native app playback
+- Album playback requires queuing individual tracks - confirmed by inspecting Sonos queue during native app playback
 - iTunes Search API provides usable track IDs (no auth required)
 - Full album tracklist: `https://itunes.apple.com/lookup?id={album_id}&entity=song`
   - Returns album row first (`wrapperType: "collection"`) then tracks (`wrapperType: "track"`)
@@ -46,38 +46,38 @@ Test infrastructure:
 - Song search: `https://itunes.apple.com/search?term={query}&entity=song`
 - Track lookup: `https://itunes.apple.com/lookup?id={track_id}` (returns single track)
 - iTunes API key field names: `trackId`, `collectionId`, `artistName`, `trackName`, `collectionName`, `artworkUrl100`, `trackNumber`, `wrapperType`
-- Artwork URL: `artworkUrl100` is 100×100px — replace `100x100bb` with `600x600bb` in URL for higher resolution; applied internally, so all returned dicts already have high-res URLs
+- Artwork URL: `artworkUrl100` is 100×100px - replace `100x100bb` with `600x600bb` in URL for higher resolution; applied internally, so all returned dicts already have high-res URLs
 - Behavior on new tag scan: replace immediately (stop current, start new)
 - Speaker: global default set in config (single speaker, no per-tag)
 - Mac environment: Python 3.9, use `python3` / `pip3`
 
 ### Apple Music / Sonos SMAPI Integration (hard-won findings)
 - Apple Music service type on Sonos: `52231` (= 204 × 256 + 7), `sid=204`
-- Apple Music uses AppLink authentication — token stored encrypted on the Sonos speaker
+- Apple Music uses AppLink authentication - token stored encrypted on the Sonos speaker
 - **Apple Music UDN format:** `SA_RINCON52231_X_#Svc52231-{token}-Token`
   - Found by browsing Sonos favorites (`FV:2`) and inspecting `<r:resMD>` fields
   - `_lookup_apple_music_udn(speaker, sn)` matches `sn={sn}` in the `<res>` URI to extract the right UDN
-- **Sonos SMAPI lookup trigger:** Sonos calls `GetMediaMetadata` on Apple Music SMAPI when a track is added via `AddURIToQueue`. It uses the DIDL `item id` to construct the SMAPI request — **`id="-1"` causes this lookup to fail silently**, storing only `object.item` / `application/octet-stream`
-- **Correct item ID format:** `10032028song%3a{track_id}` — Sonos content-browser ID for Apple Music library/purchased songs
+- **Sonos SMAPI lookup trigger:** Sonos calls `GetMediaMetadata` on Apple Music SMAPI when a track is added via `AddURIToQueue`. It uses the DIDL `item id` to construct the SMAPI request - **`id="-1"` causes this lookup to fail silently**, storing only `object.item` / `application/octet-stream`
+- **Correct item ID format:** `10032028song%3a{track_id}` - Sonos content-browser ID for Apple Music library/purchased songs
   - `10032028` = Apple Music musicTrack prefix
   - `10092064` = Apple Music audioBroadcast (radio)
   - `1006206c` = Apple Music playlist container
-- When SMAPI lookup succeeds, Sonos stores full metadata (title, artist, album, `musicTrack` class) in the queue — no need to include creator/album in submitted DIDL
-- `/status/accounts` endpoint on Sonos returns encrypted Apple Music account data — not useful for extracting UDN
+- When SMAPI lookup succeeds, Sonos stores full metadata (title, artist, album, `musicTrack` class) in the queue - no need to include creator/album in submitted DIDL
+- `/status/accounts` endpoint on Sonos returns encrypted Apple Music account data - not useful for extracting UDN
 
 ---
 
 ## Project Structure
 ```
 vinyl-emulator/
-├── config.json           # sn value, default speaker IP, nfc_mode — NOT committed to git
+├── config.json           # sn value, default speaker IP, nfc_mode - NOT committed to git
 ├── config.json.example   # Safe template, committed to git
 ├── .gitignore            # Excludes config.json, __pycache__, *.pyc
 ├── README.md
 ├── apple_music.py        # iTunes API: search_albums, search_songs, get_album_tracks, get_track
 ├── sonos_controller.py   # SoCo queue management: get_speakers, play_album
 ├── nfc_interface.py      # Abstract NFC layer (mock or real) + parse_tag_data
-├── player.py             # Main loop — uses nfc_interface; --simulate, --read flags
+├── player.py             # Main loop - uses nfc_interface; --simulate, --read flags
 ├── app.py                # Flask web UI
 ├── templates/
 │   ├── base.html         # Shared layout (nav: Search, Collection, Verify Tag, Settings) + Now Playing bar
@@ -124,7 +124,7 @@ __pycache__/
 | `apple:track:{track_id}` | Single song |
 
 Examples: `apple:1440903625` (album), `apple:track:1440904001` (song)
-- NTAG213 has 144 bytes — plenty for this
+- NTAG213 has 144 bytes - plenty for this
 - Human-readable, easy to debug
 - Backward compatible: old album tags still work
 
@@ -150,7 +150,7 @@ The web UI settings page displays this reminder when in `pn532` mode.
 - `get_track(track_id)` → single-element list: `[{track_id, name, track_number, artist, album, artwork_url}]`
 - `build_track_uri(track_id, sn)` → `x-sonos-http:song%3a{track_id}.mp4?sid=204&flags=8232&sn={sn}`
 - `build_track_metadata(track)` → DIDL-Lite XML string
-- `upgrade_artwork_url(url)` → replaces `100x100bb` with `600x600bb` — called internally
+- `upgrade_artwork_url(url)` → replaces `100x100bb` with `600x600bb` - called internally
 
 ---
 
@@ -184,9 +184,9 @@ Raises `ValueError` with a clear message if format is unrecognised.
 ### player.py
 
 CLI flags:
-- `--simulate <tag_string>` — parse tag, fetch tracks, play, exit
-- `--read` — read one tag from NFC, print it, exit (useful for verifying physical cards)
-- (no flag) — run the main NFC loop forever
+- `--simulate <tag_string>` - parse tag, fetch tracks, play, exit
+- `--read` - read one tag from NFC, print it, exit (useful for verifying physical cards)
+- (no flag) - run the main NFC loop forever
 
 Tag dispatch:
 ```python
@@ -208,17 +208,17 @@ Tests monkeypatch `app.CONFIG_PATH` to a temp file via the `temp_config` fixture
 **Routes:**
 | Route | Method | Body | Purpose |
 |---|---|---|---|
-| `/` | GET | — | Search page (Albums / Songs tab toggle) |
-| `/search` | GET `?q=&type=` | — | JSON results; `type=song` → songs, default → albums |
-| `/album/<id>` | GET | — | Album detail + track listing (each track linked to `/track/<id>`) |
-| `/track/<id>` | GET | — | Single track detail |
+| `/` | GET | - | Search page (Albums / Songs tab toggle) |
+| `/search` | GET `?q=&type=` | - | JSON results; `type=song` → songs, default → albums |
+| `/album/<id>` | GET | - | Album detail + track listing (each track linked to `/track/<id>`) |
+| `/track/<id>` | GET | - | Single track detail |
 | `/play` | POST | `{"album_id": "..."}` or `{"track_id": "..."}` | Queues and plays on Sonos |
 | `/write-tag` | POST | `{"album_id": "..."}` or `{"track_id": "..."}` | Writes tag via NFC |
-| `/read-tag` | GET `?tag=` | — | Reads NFC tag; `?tag=` param bypasses NFC (mock mode) |
-| `/verify` | GET | — | Verify Tag page |
-| `/settings` | GET | — | Settings form |
+| `/read-tag` | GET `?tag=` | - | Reads NFC tag; `?tag=` param bypasses NFC (mock mode) |
+| `/verify` | GET | - | Verify Tag page |
+| `/settings` | GET | - | Settings form |
 | `/settings` | POST | Form: `sn`, `speaker_ip`, `nfc_mode` | Saves to config.json |
-| `/speakers` | GET | — | JSON list of Sonos speakers (5–10s, soco.discover) |
+| `/speakers` | GET | - | JSON list of Sonos speakers (5–10s, soco.discover) |
 
 **`/read-tag` response shape:**
 ```json
@@ -248,32 +248,32 @@ Tests monkeypatch `app.CONFIG_PATH` to a temp file via the `temp_config` fixture
 ```
 
 Key points:
-- `id`/`parentID` = `10032028song%3a{track_id}` — tells Sonos how to look up the track via SMAPI
+- `id`/`parentID` = `10032028song%3a{track_id}` - tells Sonos how to look up the track via SMAPI
 - `desc` must contain the full Apple Music UDN (e.g. `SA_RINCON52231_X_#Svc52231-f7c0f087-Token`), obtained dynamically via `_lookup_apple_music_udn()`
-- Do NOT include `dc:creator`, `upnp:album`, or `upnp:albumArtURI` — Sonos populates these from SMAPI
-- `id="-1"` does NOT work — SMAPI lookup silently fails, queue stores bare `object.item` with no metadata
+- Do NOT include `dc:creator`, `upnp:album`, or `upnp:albumArtURI` - Sonos populates these from SMAPI
+- `id="-1"` does NOT work - SMAPI lookup silently fails, queue stores bare `object.item` with no metadata
 
 ---
 
 ## Build Order
 
-### Phase 1 — Core Playback ✅
-1. `tests/conftest.py` — shared fixtures
-2. `apple_music.py` (TDD) — search, lookup, URI building, metadata
-3. `sonos_controller.py` (TDD) — play_album, get_speakers
+### Phase 1 - Core Playback ✅
+1. `tests/conftest.py` - shared fixtures
+2. `apple_music.py` (TDD) - search, lookup, URI building, metadata
+3. `sonos_controller.py` (TDD) - play_album, get_speakers
 4. Integration verify: Hysteria plays on Family Room with track names + art
 
-### Phase 2 — NFC Interface ✅
-5. `nfc_interface.py` (TDD) — MockNFC, PN532NFC stub, parse_tag_data
-6. `player.py` — config loading, --simulate flag, main loop, --read flag
+### Phase 2 - NFC Interface ✅
+5. `nfc_interface.py` (TDD) - MockNFC, PN532NFC stub, parse_tag_data
+6. `player.py` - config loading, --simulate flag, main loop, --read flag
 7. Verify: `--simulate apple:1440903625` plays and exits; typed tag in loop works
 
-### Phase 3 — Web UI ✅
-8. `app.py` routes (TDD) — all routes listed above
-9. Templates — index (tabs), album (linked tracks), track, verify, settings, base
+### Phase 3 - Web UI ✅
+8. `app.py` routes (TDD) - all routes listed above
+9. Templates - index (tabs), album (linked tracks), track, verify, settings, base
 10. Verify: Browser search → album → track → write tag (mock); verify tag page works
 
-### Phase 4 — Hardware Procurement & Pi Setup
+### Phase 4 - Hardware Procurement & Pi Setup
 **Shopping List (already compiled):**
 | Item | Notes | Est. Cost |
 |---|---|---|
@@ -285,7 +285,7 @@ Key points:
 
 **Pi Setup:**
 1. Download Raspberry Pi Imager on Mac
-2. Flash new SD: **Raspberry Pi OS Lite (32-bit)** — use 32-bit on the Zero 2 W (512MB RAM, 64-bit OS adds overhead without benefit)
+2. Flash new SD: **Raspberry Pi OS Lite (32-bit)** - use 32-bit on the Zero 2 W (512MB RAM, 64-bit OS adds overhead without benefit)
 3. In Imager settings: username + password, hostname `vinyl-pi`, SSH, WiFi credentials
 4. `ssh YOUR_USERNAME@vinyl-pi.local`
 5. `sudo apt update && sudo apt upgrade -y`
@@ -298,7 +298,7 @@ Key points:
 3. `pip3 install adafruit-circuitpython-pn532 RPi.GPIO spidev`
 4. Run Adafruit test script to confirm HAT detected
 
-### Phase 5 — Deploy to Pi & Real NFC
+### Phase 5 - Deploy to Pi & Real NFC
 1. Push project to GitHub from Mac
 2. On Pi: `git clone <repo> && cd vinyl-emulator`
 3. Run setup script: `chmod +x setup.sh && ./setup.sh`
@@ -313,7 +313,7 @@ Key points:
    - Reference: https://docs.circuitpython.org/projects/pn532/en/latest/
 6. `sudo systemctl stop vinyl-player` → test write via web UI → `sudo systemctl start vinyl-player` → tap tag → music plays
 
-### Phase 6 — Production
+### Phase 6 - Production
 
 `setup.sh` handles all of this automatically. Manual steps for reference:
 

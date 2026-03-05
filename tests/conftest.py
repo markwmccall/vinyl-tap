@@ -18,7 +18,7 @@ SAMPLE_SEARCH_RESPONSE = {
     ],
 }
 
-# Note: first item is the album row (wrapperType "collection") — must be filtered out
+# Note: first item is the album row (wrapperType "collection") - must be filtered out
 SAMPLE_SONG_SEARCH_RESPONSE = {
     "resultCount": 2,
     "results": [

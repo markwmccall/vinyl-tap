@@ -1,5 +1,5 @@
 #!/bin/bash
-# Vinyl Emulator — Raspberry Pi setup script
+# Vinyl Emulator - Raspberry Pi setup script
 # Run once after cloning the repo on the Pi:
 #   chmod +x setup.sh && ./setup.sh
 #

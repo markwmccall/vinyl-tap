@@ -86,7 +86,7 @@ class TestParseNdefText:
 
     def test_returns_none_for_uri_record_type(self):
         from nfc_interface import _build_ndef_uri_tlv, _parse_ndef_text
-        # URI records have type 'U' (0x55), not 'T' — should return None
+        # URI records have type 'U' (0x55), not 'T' - should return None
         tlv = _build_ndef_uri_tlv("http://vinyl-pi.local:5000")
         assert _parse_ndef_text(tlv) is None
 

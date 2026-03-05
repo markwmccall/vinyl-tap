@@ -73,6 +73,41 @@ echo "      Service installed, enabled, and restarted"
 # Remove obsolete sudoers entry if present
 sudo rm -f /etc/sudoers.d/vinyl-emulator
 
+# --- Optional: disable WiFi power management ---
+echo ""
+read -p "Disable WiFi power management? Prevents Pi from dropping off the network overnight. [Y/n] " -n 1 -r
+echo ""
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    sudo tee /etc/systemd/system/wifi-pm-off.service > /dev/null <<'EOF'
+[Unit]
+Description=Disable WiFi power management
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/iwconfig wlan0 power off
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable wifi-pm-off
+    sudo systemctl start wifi-pm-off
+    echo "      WiFi power management disabled"
+fi
+
+# --- Optional: persistent system logs ---
+echo ""
+read -p "Enable persistent logs? Helps diagnose unexpected reboots/freezes. [Y/n] " -n 1 -r
+echo ""
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    sudo mkdir -p /var/log/journal
+    sudo systemd-tmpfiles --create --prefix /var/log/journal
+    sudo systemctl restart systemd-journald
+    echo "      Persistent logging enabled"
+fi
+
 # --- Done ---
 echo ""
 echo "=== Setup complete ==="

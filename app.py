@@ -805,6 +805,8 @@ if __name__ == "__main__":  # pragma: no cover
     parser = argparse.ArgumentParser(description="Vinyl emulator web UI")
     parser.add_argument("--host", default="127.0.0.1",
                         help="Host to bind to (use 0.0.0.0 for Pi)")
+    parser.add_argument("--port", type=int, default=5000,
+                        help="Port to listen on (use 80 with authbind on Pi)")
     args = parser.parse_args()
     _start_nfc_thread(CONFIG_PATH)
-    app.run(host=args.host, port=5000)
+    app.run(host=args.host, port=args.port)

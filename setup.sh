@@ -21,13 +21,19 @@ echo ""
 # --- System packages ---
 echo "[1/5] Installing system packages..."
 sudo apt-get update -qq
-sudo apt-get install -y python3-pip python3-dev python3-venv git libxml2-dev libxslt-dev python3-lxml
+sudo apt-get install -y python3-pip python3-dev python3-venv git libxml2-dev libxslt-dev python3-lxml authbind
 
 # --- Enable I2C and add user to i2c group ---
 echo "[2/5] Enabling I2C interface..."
 sudo raspi-config nonint do_i2c 0
 sudo usermod -a -G i2c "$USERNAME"
 echo "      I2C enabled and $USERNAME added to i2c group (takes effect after reboot)"
+
+# --- authbind: allow the service user to bind port 80 ---
+echo "[1b/5] Configuring authbind for port 80..."
+sudo touch /etc/authbind/byport/80
+sudo chown "$USERNAME" /etc/authbind/byport/80
+sudo chmod 500 /etc/authbind/byport/80
 
 # --- Stop service before touching the venv ---
 sudo systemctl stop vinyl-web 2>/dev/null || true
@@ -114,7 +120,7 @@ echo "=== Setup complete ==="
 echo ""
 echo "Next steps:"
 echo "  1. Reboot the Pi:  sudo reboot"
-echo "  2. After reboot, open http://vinyl-pi.local:5000 in your browser"
+echo "  2. After reboot, open http://vinyl-pi.local in your browser"
 echo "  3. Go to Settings and enter your Sonos speaker IP and sn value"
 echo "  4. Tap an NFC card to play music"
 echo ""

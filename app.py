@@ -116,7 +116,7 @@ def _nfc_loop(config_path):
                 _nfc_read_queue.put_nowait(tag_data)
             except queue.Full:
                 pass
-            continue
+            continue  # pragma: no cover
 
         if tag_data == _nfc_last_tag:
             continue  # same card still present - ignore
@@ -355,25 +355,84 @@ def play():
     return jsonify({"status": "ok"})
 
 
-@app.route("/settings", methods=["GET", "POST"])
+@app.route("/settings")
 def settings():
+    config = _load_config()
+    return render_template("settings.html", config=config)
+
+
+@app.route("/settings/sonos", methods=["GET", "POST"])
+def settings_sonos():
     config = _load_config()
     saved = False
     if request.method == "POST":
         token = request.form.get("csrf_token", "")
         if not token or token != session.get("csrf_token"):
             abort(403)
-        config["sn"] = request.form.get("sn", config["sn"])
         config["speaker_ip"] = request.form.get("speaker_ip", config["speaker_ip"])
         config["speaker_name"] = request.form.get("speaker_name", config.get("speaker_name", ""))
+        config["sn"] = request.form.get("sn", config["sn"])
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(config, f, indent=2)
+        saved = True
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return render_template("settings_sonos.html", config=config, saved=saved,
+                           csrf_token=session["csrf_token"])
+
+
+@app.route("/settings/nfc", methods=["GET", "POST"])
+def settings_nfc():
+    config = _load_config()
+    saved = False
+    if request.method == "POST":
+        token = request.form.get("csrf_token", "")
+        if not token or token != session.get("csrf_token"):
+            abort(403)
         config["nfc_mode"] = request.form.get("nfc_mode", config["nfc_mode"])
         with open(CONFIG_PATH, "w") as f:
             json.dump(config, f, indent=2)
         saved = True
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_hex(32)
-    return render_template("settings.html", config=config, saved=saved,
+    return render_template("settings_nfc.html", config=config, saved=saved,
                            csrf_token=session["csrf_token"])
+
+
+@app.route("/settings/sticker")
+def settings_sticker():
+    return render_template("settings_sticker.html")
+
+
+@app.route("/settings/reboot", methods=["GET", "POST"])
+def settings_reboot():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    if request.method == "POST":
+        token = request.form.get("csrf_token", "")
+        if not token or token != session.get("csrf_token"):
+            abort(403)
+        subprocess.Popen(["sudo", "reboot"])
+        return render_template("settings_reboot.html", rebooting=True,
+                               csrf_token=session["csrf_token"])
+    return render_template("settings_reboot.html", rebooting=False,
+                           csrf_token=session["csrf_token"])
+
+
+_PLACEHOLDERS = {
+    "update":   ("Update",   "Coming soon - depends on issue #12"),
+    "hardware": ("Hardware", "Coming soon - depends on issue #18"),
+    "storage":  ("Storage",  "Coming soon - depends on issue #18"),
+    "network":  ("Network",  "Coming soon - depends on issue #19"),
+}
+
+
+@app.route("/settings/<section>")
+def settings_placeholder(section):
+    if section not in _PLACEHOLDERS:
+        abort(404)
+    title, note = _PLACEHOLDERS[section]
+    return render_template("settings_placeholder.html", title=title, note=note)
 
 
 @app.route("/speakers")
@@ -402,7 +461,7 @@ def read_tag():
                 while not _nfc_read_queue.empty():
                     try:
                         _nfc_read_queue.get_nowait()
-                    except queue.Empty:
+                    except queue.Empty:  # pragma: no cover
                         break
         else:
             try:
@@ -581,7 +640,7 @@ def _sigterm_handler(signum, frame):
     sys.exit(0)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     logging.basicConfig(level=logging.INFO)
     signal.signal(signal.SIGTERM, _sigterm_handler)
     parser = argparse.ArgumentParser(description="Vinyl emulator web UI")

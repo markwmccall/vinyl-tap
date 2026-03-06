@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %} - Sonos{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+  <a href="{{ url_for('settings') }}" class="settings-back">&#8249; Settings</a>
+  <h1>Sonos</h1>
+
+  {% if saved %}
+  <div class="banner success">Settings saved.</div>
+  {% endif %}
+
+  <form method="POST" action="/settings/sonos">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label>Speaker</label>
+      <div class="speaker-row">
+        <div class="speaker-name-area">
+          <div id="speaker-name-display" class="speaker-name-display{% if not config.speaker_name %} hidden{% endif %}">{{ config.speaker_name or '' }}</div>
+          <input type="text" id="speaker_ip" name="speaker_ip"
+                 value="{{ config.speaker_ip }}" placeholder="10.0.0.12"
+                 class="{% if config.speaker_name %}speaker-ip-secondary{% endif %}">
+        </div>
+        <button type="button" id="discover-btn">Discover</button>
+      </div>
+      <input type="hidden" id="speaker_name" name="speaker_name"
+             value="{{ config.speaker_name or '' }}">
+      <select id="speaker-select" style="display:none">
+        <option value="">- select a speaker -</option>
+      </select>
+      <span id="discover-status" class="hint">
+        If you rename your speaker in the Sonos app, tap Discover again to update.
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="sn">Apple Music Account (sn)</label>
+      <div class="speaker-row">
+        <input type="text" id="sn" name="sn" value="{{ config.sn }}">
+        <button type="button" id="detect-sn-btn">Detect</button>
+      </div>
+      <span id="detect-sn-status" class="hint">Detect requires at least one Apple Music favorite saved in the Sonos app. If detection fails, try small numbers like 3 or 5. To confirm the value is correct, save and try playing an album or track.</span>
+    </div>
+
+    <button type="submit" class="save-btn">Save</button>
+  </form>
+</div>
+
+<script>
+  const discoverBtn = document.getElementById('discover-btn');
+  const speakerSelect = document.getElementById('speaker-select');
+  const speakerIpInput = document.getElementById('speaker_ip');
+  const speakerNameInput = document.getElementById('speaker_name');
+  const speakerNameDisplay = document.getElementById('speaker-name-display');
+  const discoverStatus = document.getElementById('discover-status');
+
+  let discoveredSpeakers = [];
+
+  discoverBtn.addEventListener('click', async () => {
+    discoverBtn.disabled = true;
+    discoverStatus.textContent = 'Discovering speakers... (this takes ~10s)';
+    speakerSelect.style.display = 'none';
+    try {
+      const resp = await fetch('/speakers');
+      discoveredSpeakers = await resp.json();
+      discoverStatus.textContent = '';
+      if (!discoveredSpeakers.length) {
+        discoverStatus.textContent = 'No speakers found.';
+        discoverBtn.disabled = false;
+        return;
+      }
+      speakerSelect.innerHTML = '<option value="">- select a speaker -</option>' +
+        discoveredSpeakers.map(s => `<option value="${s.ip}">${s.name} (${s.ip})</option>`).join('');
+      speakerSelect.style.display = 'block';
+      discoverBtn.disabled = false;
+    } catch (e) {
+      discoverStatus.textContent = 'Discovery failed.';
+      discoverBtn.disabled = false;
+    }
+  });
+
+  const detectSnBtn = document.getElementById('detect-sn-btn');
+  const snInput = document.getElementById('sn');
+  const detectSnStatus = document.getElementById('detect-sn-status');
+
+  detectSnBtn.addEventListener('click', async () => {
+    detectSnBtn.disabled = true;
+    detectSnStatus.textContent = 'Detecting...';
+    const ip = speakerIpInput.value.trim();
+    const url = ip ? `/detect-sn?speaker_ip=${encodeURIComponent(ip)}` : '/detect-sn';
+    try {
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (resp.ok) {
+        snInput.value = data.sn;
+        detectSnStatus.textContent = `Detected: ${data.sn}`;
+      } else {
+        detectSnStatus.textContent = data.error || 'Not found - enter 3 or 5 manually';
+      }
+    } catch (e) {
+      detectSnStatus.textContent = 'Detection failed.';
+    }
+    detectSnBtn.disabled = false;
+  });
+
+  speakerSelect.addEventListener('change', () => {
+    const selected = discoveredSpeakers.find(s => s.ip === speakerSelect.value);
+    if (selected) {
+      speakerIpInput.value = selected.ip;
+      speakerNameInput.value = selected.name;
+      speakerNameDisplay.textContent = selected.name;
+      speakerNameDisplay.classList.remove('hidden');
+      speakerIpInput.classList.add('speaker-ip-secondary');
+      speakerSelect.style.display = 'none';
+      discoverStatus.textContent = '';
+    }
+  });
+</script>
+{% endblock %}

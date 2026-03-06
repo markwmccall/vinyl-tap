@@ -4,163 +4,49 @@
 {% block content %}
 <div class="settings-page">
   <h1>Settings</h1>
-
-{% if saved %}
-  <div class="banner success">Settings saved.</div>
-  {% endif %}
-
-  <form method="POST" action="/settings">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="field">
-      <label>Sonos Speaker</label>
-      <div class="speaker-row">
-        <div class="speaker-name-area">
-          <div id="speaker-name-display" class="speaker-name-display{% if not config.speaker_name %} hidden{% endif %}">{{ config.speaker_name or '' }}</div>
-          <input type="text" id="speaker_ip" name="speaker_ip"
-                 value="{{ config.speaker_ip }}" placeholder="10.0.0.12"
-                 class="{% if config.speaker_name %}speaker-ip-secondary{% endif %}">
-        </div>
-        <button type="button" id="discover-btn">Discover</button>
-      </div>
-      <input type="hidden" id="speaker_name" name="speaker_name"
-             value="{{ config.speaker_name or '' }}">
-      <select id="speaker-select" style="display:none">
-        <option value="">- select a speaker -</option>
-      </select>
-      <span id="discover-status" class="hint">
-        If you rename your speaker in the Sonos app, tap Discover again to update.
-      </span>
-    </div>
-
-    <div class="field">
-      <label for="sn">Apple Music Account (sn)</label>
-      <div class="speaker-row">
-        <input type="text" id="sn" name="sn" value="{{ config.sn }}">
-        <button type="button" id="detect-sn-btn">Detect</button>
-      </div>
-      <span id="detect-sn-status" class="hint">Detect requires at least one Apple Music favorite saved in the Sonos app. If detection fails, try small numbers like 3 or 5. To confirm the value is correct, save and try playing an album or track.</span>
-    </div>
-
-    <div class="field">
-      <label for="nfc_mode">NFC Mode</label>
-      <select id="nfc_mode" name="nfc_mode">
-        <option value="mock" {% if config.nfc_mode == 'mock' %}selected{% endif %}>
-          mock (no hardware)
-        </option>
-        <option value="pn532" {% if config.nfc_mode == 'pn532' %}selected{% endif %}>
-          pn532 (Raspberry Pi)
-        </option>
-      </select>
-    </div>
-
-    <button type="submit" class="save-btn">Save</button>
-  </form>
-
-  <div class="sticker-section">
-    <h2>Web UI Sticker</h2>
-    <p>Write a URL tag that opens this web UI when tapped on an iPhone.</p>
-    <button id="write-url-btn" type="button" class="write-btn">Write Sticker Tag</button>
-    <p id="write-url-status" class="hint"></p>
-  </div>
-
-  <div class="logs-link-section">
-    <a href="{{ url_for('logs') }}">View server logs</a>
-  </div>
+  <ul class="settings-menu">
+    <li><a href="{{ url_for('settings_sonos') }}" class="settings-row">
+      <span class="settings-row-title">Sonos</span>
+      <span class="settings-row-detail">{{ config.speaker_name or config.speaker_ip or '' }}</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="{{ url_for('settings_nfc') }}" class="settings-row">
+      <span class="settings-row-title">NFC</span>
+      <span class="settings-row-detail">{{ config.nfc_mode }}</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="{{ url_for('logs') }}" class="settings-row">
+      <span class="settings-row-title">Logs</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="{{ url_for('settings_reboot') }}" class="settings-row">
+      <span class="settings-row-title">Reboot</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="/settings/update" class="settings-row settings-row-disabled">
+      <span class="settings-row-title">Update</span>
+      <span class="settings-row-detail">Coming soon</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="{{ url_for('settings_sticker') }}" class="settings-row">
+      <span class="settings-row-title">Web UI Tag</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="/settings/hardware" class="settings-row settings-row-disabled">
+      <span class="settings-row-title">Hardware</span>
+      <span class="settings-row-detail">Coming soon</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="/settings/storage" class="settings-row settings-row-disabled">
+      <span class="settings-row-title">Storage</span>
+      <span class="settings-row-detail">Coming soon</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+    <li><a href="/settings/network" class="settings-row settings-row-disabled">
+      <span class="settings-row-title">Network</span>
+      <span class="settings-row-detail">Coming soon</span>
+      <span class="settings-chevron">&#8250;</span>
+    </a></li>
+  </ul>
 </div>
-
-<script>
-  const discoverBtn = document.getElementById('discover-btn');
-  const speakerSelect = document.getElementById('speaker-select');
-  const speakerIpInput = document.getElementById('speaker_ip');
-  const speakerNameInput = document.getElementById('speaker_name');
-  const speakerNameDisplay = document.getElementById('speaker-name-display');
-  const discoverStatus = document.getElementById('discover-status');
-
-  // Store speaker name alongside IP so re-discovery can find the speaker if its IP changes
-  let discoveredSpeakers = [];
-
-  discoverBtn.addEventListener('click', async () => {
-    discoverBtn.disabled = true;
-    discoverStatus.textContent = 'Discovering speakers… (this takes ~10s)';
-    speakerSelect.style.display = 'none';
-    try {
-      const resp = await fetch('/speakers');
-      discoveredSpeakers = await resp.json();
-      discoverStatus.textContent = '';
-      if (!discoveredSpeakers.length) {
-        discoverStatus.textContent = 'No speakers found.';
-        discoverBtn.disabled = false;
-        return;
-      }
-      speakerSelect.innerHTML = '<option value="">- select a speaker -</option>' +
-        discoveredSpeakers.map(s => `<option value="${s.ip}">${s.name} (${s.ip})</option>`).join('');
-      speakerSelect.style.display = 'block';
-      discoverBtn.disabled = false;
-    } catch (e) {
-      discoverStatus.textContent = 'Discovery failed.';
-      discoverBtn.disabled = false;
-    }
-  });
-
-  const detectSnBtn = document.getElementById('detect-sn-btn');
-  const snInput = document.getElementById('sn');
-  const detectSnStatus = document.getElementById('detect-sn-status');
-
-  detectSnBtn.addEventListener('click', async () => {
-    detectSnBtn.disabled = true;
-    detectSnStatus.textContent = 'Detecting…';
-    const ip = speakerIpInput.value.trim();
-    const url = ip ? `/detect-sn?speaker_ip=${encodeURIComponent(ip)}` : '/detect-sn';
-    try {
-      const resp = await fetch(url);
-      const data = await resp.json();
-      if (resp.ok) {
-        snInput.value = data.sn;
-        detectSnStatus.textContent = `Detected: ${data.sn}`;
-      } else {
-        detectSnStatus.textContent = data.error || 'Not found - enter 3 or 5 manually';
-      }
-    } catch (e) {
-      detectSnStatus.textContent = 'Detection failed.';
-    }
-    detectSnBtn.disabled = false;
-  });
-
-  speakerSelect.addEventListener('change', () => {
-    const selected = discoveredSpeakers.find(s => s.ip === speakerSelect.value);
-    if (selected) {
-      speakerIpInput.value = selected.ip;
-      speakerNameInput.value = selected.name;
-      speakerNameDisplay.textContent = selected.name;
-      speakerNameDisplay.classList.remove('hidden');
-      speakerIpInput.classList.add('speaker-ip-secondary');
-      speakerSelect.style.display = 'none';
-      discoverStatus.textContent = '';
-    }
-  });
-
-  const writeUrlBtn = document.getElementById('write-url-btn');
-  const writeUrlStatus = document.getElementById('write-url-status');
-
-  writeUrlBtn.addEventListener('click', async () => {
-    writeUrlBtn.disabled = true;
-    writeUrlStatus.textContent = 'Hold tag to reader…';
-    writeUrlStatus.className = 'hint';
-    try {
-      const resp = await fetch('/write-url-tag', {method: 'POST'});
-      const data = await resp.json();
-      if (resp.ok) {
-        writeUrlStatus.textContent = '✓ Written: ' + data.written;
-        writeUrlStatus.className = 'hint success';
-      } else {
-        writeUrlStatus.textContent = data.error || 'Write failed.';
-        writeUrlStatus.className = 'hint error';
-      }
-    } catch (e) {
-      writeUrlStatus.textContent = 'Error - check the console.';
-      writeUrlStatus.className = 'hint error';
-    }
-    writeUrlBtn.disabled = false;
-  });
-</script>
 {% endblock %}

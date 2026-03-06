@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %} - Reboot{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+  <a href="{{ url_for('settings') }}" class="settings-back">&#8249; Settings</a>
+  <h1>Reboot</h1>
+
+  {% if rebooting %}
+  <div class="banner success">Rebooting... the server will be unavailable for ~30 seconds.</div>
+  {% else %}
+  <p>Restart the Raspberry Pi. The web UI will be unavailable for ~30 seconds.</p>
+  <form method="POST" action="/settings/reboot">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="save-btn reboot-btn">Reboot Raspberry Pi</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

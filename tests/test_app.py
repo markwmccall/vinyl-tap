@@ -414,54 +414,163 @@ class TestSettings:
         resp = client.get("/settings")
         assert resp.status_code == 200
 
-    def test_get_renders_current_config(self, client, temp_config):
+    def test_renders_menu_rows(self, client, temp_config):
         resp = client.get("/settings")
-        assert b"10.0.0.12" in resp.data
+        assert b"/settings/sonos" in resp.data
+        assert b"/settings/nfc" in resp.data
+        assert b"/settings/sticker" in resp.data
+        assert b"/settings/reboot" in resp.data
 
-    def test_post_saves_config(self, client, temp_config):
+    def test_shows_speaker_detail(self, client, temp_config):
+        resp = client.get("/settings")
+        assert b"Family Room" in resp.data
+
+    def test_shows_nfc_detail(self, client, temp_config):
+        resp = client.get("/settings")
+        assert b"mock" in resp.data
+
+
+class TestSettingsSonos:
+    def test_get_returns_200(self, client, temp_config):
+        resp = client.get("/settings/sonos")
+        assert resp.status_code == 200
+
+    def test_post_saves_speaker_ip_and_sn(self, client, temp_config):
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
-        client.post("/settings", data={
-            "sn": "5",
+        client.post("/settings/sonos", data={
             "speaker_ip": "10.0.0.8",
-            "nfc_mode": "mock",
+            "speaker_name": "Kitchen",
+            "sn": "5",
             "csrf_token": "test-token",
         })
         saved = json.loads(temp_config.read_text())
-        assert saved["sn"] == "5"
         assert saved["speaker_ip"] == "10.0.0.8"
+        assert saved["speaker_name"] == "Kitchen"
+        assert saved["sn"] == "5"
 
-    def test_post_returns_200(self, client, temp_config):
+    def test_post_sets_saved_flag(self, client, temp_config):
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
-        resp = client.post("/settings", data={
-            "sn": "3",
+        resp = client.post("/settings/sonos", data={
             "speaker_ip": "10.0.0.12",
+            "speaker_name": "",
+            "sn": "3",
+            "csrf_token": "test-token",
+        })
+        assert resp.status_code == 200
+        assert b"saved" in resp.data.lower()
+
+    def test_post_csrf_missing_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/settings/sonos", data={
+            "speaker_ip": "10.0.0.8", "sn": "5",
+        })
+        assert resp.status_code == 403
+
+    def test_post_csrf_wrong_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/settings/sonos", data={
+            "speaker_ip": "10.0.0.8", "sn": "5", "csrf_token": "wrong",
+        })
+        assert resp.status_code == 403
+
+
+class TestSettingsNfc:
+    def test_get_returns_200(self, client, temp_config):
+        resp = client.get("/settings/nfc")
+        assert resp.status_code == 200
+
+    def test_post_saves_nfc_mode(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        client.post("/settings/nfc", data={
+            "nfc_mode": "pn532",
+            "csrf_token": "test-token",
+        })
+        saved = json.loads(temp_config.read_text())
+        assert saved["nfc_mode"] == "pn532"
+
+    def test_post_sets_saved_flag(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/settings/nfc", data={
             "nfc_mode": "mock",
             "csrf_token": "test-token",
         })
         assert resp.status_code == 200
+        assert b"saved" in resp.data.lower()
 
-    def test_post_rejects_missing_csrf_token(self, client, temp_config):
+    def test_post_csrf_missing_returns_403(self, client, temp_config):
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
-        resp = client.post("/settings", data={
-            "sn": "5",
-            "speaker_ip": "10.0.0.8",
-            "nfc_mode": "mock",
+        resp = client.post("/settings/nfc", data={"nfc_mode": "mock"})
+        assert resp.status_code == 403
+
+    def test_post_csrf_wrong_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/settings/nfc", data={
+            "nfc_mode": "mock", "csrf_token": "wrong",
         })
         assert resp.status_code == 403
 
-    def test_post_rejects_wrong_csrf_token(self, client, temp_config):
+
+class TestSettingsSticker:
+    def test_get_returns_200(self, client, temp_config):
+        resp = client.get("/settings/sticker")
+        assert resp.status_code == 200
+
+
+class TestSettingsReboot:
+    def test_get_returns_200(self, client, temp_config):
+        resp = client.get("/settings/reboot")
+        assert resp.status_code == 200
+
+    def test_post_calls_popen(self, client, temp_config):
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
-        resp = client.post("/settings", data={
-            "sn": "5",
-            "speaker_ip": "10.0.0.8",
-            "nfc_mode": "mock",
-            "csrf_token": "wrong-token",
-        })
+        with patch("app.subprocess.Popen") as mock_popen:
+            resp = client.post("/settings/reboot", data={"csrf_token": "test-token"})
+        assert resp.status_code == 200
+        mock_popen.assert_called_once_with(["sudo", "reboot"])
+
+    def test_post_renders_rebooting_state(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        with patch("app.subprocess.Popen"):
+            resp = client.post("/settings/reboot", data={"csrf_token": "test-token"})
+        assert b"ebooting" in resp.data
+
+    def test_post_csrf_missing_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/settings/reboot", data={})
         assert resp.status_code == 403
+
+    def test_post_csrf_wrong_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/settings/reboot", data={"csrf_token": "wrong"})
+        assert resp.status_code == 403
+
+
+class TestSettingsPlaceholder:
+    @pytest.mark.parametrize("section", ["update", "hardware", "storage", "network"])
+    def test_known_sections_return_200(self, client, temp_config, section):
+        resp = client.get(f"/settings/{section}")
+        assert resp.status_code == 200
+
+    def test_unknown_section_returns_404(self, client, temp_config):
+        resp = client.get("/settings/nonexistent")
+        assert resp.status_code == 404
+
+    def test_renders_title_and_note(self, client, temp_config):
+        resp = client.get("/settings/hardware")
+        assert b"Hardware" in resp.data
+        assert b"Coming soon" in resp.data
 
 
 class TestSpeakers:
@@ -557,6 +666,23 @@ class TestReadTag:
             resp = client.get("/read-tag")
         assert resp.status_code == 200
         assert "not installed" in resp.get_json()["error"]
+
+    def test_pn532_drains_stale_queue_item(self, client, tmp_path, monkeypatch):
+        import app, json, queue as q
+        config_file = tmp_path / "config_drain.json"
+        config_file.write_text(json.dumps({"sn": "3", "speaker_ip": "10.0.0.12", "nfc_mode": "pn532"}))
+        monkeypatch.setattr(app, "CONFIG_PATH", str(config_file))
+        monkeypatch.setattr(app, "_nfc", MagicMock())
+        # Use maxsize=2 so a stale second item can sit in the queue after the main get()
+        fresh_queue = q.Queue(maxsize=2)
+        fresh_queue.put("apple:1440903625")
+        fresh_queue.put("apple:9999999999")  # stale item
+        monkeypatch.setattr(app, "_nfc_read_queue", fresh_queue)
+        with patch("app.apple_music.get_album_tracks", return_value=SAMPLE_TRACKS):
+            resp = client.get("/read-tag")
+        assert resp.status_code == 200
+        assert resp.get_json()["tag_string"] == "apple:1440903625"
+        assert fresh_queue.empty()  # stale item was drained
 
     def test_pn532_no_card_returns_null_tag(self, client, tmp_path, monkeypatch):
         import app, json, queue as q
@@ -1165,6 +1291,36 @@ class TestNfcLoop:
                 app._nfc_loop(pn532_config)
         mock_play.assert_not_called()
         assert fresh_queue.get_nowait() == "apple:1440903625"
+
+    def test_web_read_pending_queue_full_continues(self, pn532_config, monkeypatch):
+        """When queue is already full, put_nowait raises Full and loop continues."""
+        import app, queue as q
+        mock_nfc = MagicMock()
+        mock_nfc.read_tag.side_effect = ["apple:1440903625", KeyboardInterrupt]
+        monkeypatch.setattr(app, "_nfc", mock_nfc)
+        monkeypatch.setattr(app, "_web_read_pending", True)
+        fresh_queue = q.Queue(maxsize=1)
+        fresh_queue.put("existing")  # queue already full
+        monkeypatch.setattr(app, "_nfc_read_queue", fresh_queue)
+        with patch("app.play_album") as mock_play:
+            with pytest.raises(KeyboardInterrupt):
+                app._nfc_loop(pn532_config)
+        mock_play.assert_not_called()
+        assert fresh_queue.get_nowait() == "existing"  # original item unchanged
+
+    def test_start_nfc_thread_starts_thread(self, tmp_path, monkeypatch):
+        import app
+        config_file = tmp_path / "config_thread.json"
+        config_file.write_text(json.dumps({
+            "sn": "3", "speaker_ip": "10.0.0.12", "nfc_mode": "pn532",
+        }))
+        monkeypatch.setattr(app, "CONFIG_PATH", str(config_file))
+        with patch("app.PN532NFC"), \
+             patch("app.threading.Thread") as mock_thread:
+            mock_instance = MagicMock()
+            mock_thread.return_value = mock_instance
+            app._start_nfc_thread(str(config_file))
+        mock_instance.start.assert_called_once()
 
     def test_start_nfc_thread_no_op_in_mock_mode(self, tmp_path, monkeypatch):
         import app

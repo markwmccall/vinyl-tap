@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %} - Web UI Tag{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+  <a href="{{ url_for('settings') }}" class="settings-back">&#8249; Settings</a>
+  <h1>Web UI Tag</h1>
+  <p>Write a URL tag that opens this web UI when tapped on an iPhone.</p>
+  <button id="write-url-btn" type="button" class="write-btn">Write Sticker Tag</button>
+  <p id="write-url-status" class="hint"></p>
+</div>
+
+<script>
+  const writeUrlBtn = document.getElementById('write-url-btn');
+  const writeUrlStatus = document.getElementById('write-url-status');
+
+  writeUrlBtn.addEventListener('click', async () => {
+    writeUrlBtn.disabled = true;
+    writeUrlStatus.textContent = 'Hold tag to reader...';
+    writeUrlStatus.className = 'hint';
+    try {
+      const resp = await fetch('/write-url-tag', {method: 'POST'});
+      const data = await resp.json();
+      if (resp.ok) {
+        writeUrlStatus.textContent = '✓ Written: ' + data.written;
+        writeUrlStatus.className = 'hint success';
+      } else {
+        writeUrlStatus.textContent = data.error || 'Write failed.';
+        writeUrlStatus.className = 'hint error';
+      }
+    } catch (e) {
+      writeUrlStatus.textContent = 'Error - check the console.';
+      writeUrlStatus.className = 'hint error';
+    }
+    writeUrlBtn.disabled = false;
+  });
+</script>
+{% endblock %}

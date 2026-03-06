@@ -457,6 +457,27 @@ a.track-name:hover { color: var(--text); text-decoration: underline; }
 }
 .save-btn:hover { background: var(--surface); border-color: var(--border-focus); }
 
+/* Settings menu hub */
+.settings-menu { list-style: none; padding: 0; margin: 1.5rem 0; border-top: 1px solid var(--border); }
+.settings-row {
+  display: flex;
+  align-items: center;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+  gap: 0.5rem;
+}
+.settings-row-title { flex: 1; font-size: 1rem; }
+.settings-row-detail { color: var(--text-3); font-size: 0.9rem; }
+.settings-chevron { color: var(--text-3); font-size: 1.2rem; margin-left: 0.25rem; }
+.settings-row-disabled { opacity: 0.45; pointer-events: none; }
+.settings-row:hover:not(.settings-row-disabled) { background: var(--surface); }
+
+/* Sub-page back link */
+.settings-back { display: inline-block; margin-bottom: 1.25rem; color: var(--text-2); text-decoration: none; font-size: 0.95rem; }
+.settings-back:hover { color: var(--text); }
+
 .sticker-section {
   background: var(--surface);
   border: 1px solid var(--border);

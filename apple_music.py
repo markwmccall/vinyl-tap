@@ -81,7 +81,7 @@ def get_album_tracks(album_id):
     release_year = collection.get("releaseDate", "")[:4] if collection else ""
     copyright_line = collection.get("copyright", "") if collection else ""
     tracks = [r for r in data["results"] if r.get("wrapperType") == "track"]
-    tracks.sort(key=lambda t: t["trackNumber"])
+    tracks.sort(key=lambda t: (t.get("discNumber", 1), t["trackNumber"]))
     return [
         {
             "track_id": t["trackId"],

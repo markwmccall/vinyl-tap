@@ -109,6 +109,32 @@ class TestGetAlbumTracks:
             tracks = get_album_tracks(1440903625)
         assert tracks == []
 
+    def test_sorted_by_disc_then_track_number(self):
+        from apple_music import get_album_tracks
+        response = {
+            "resultCount": 5,
+            "results": [
+                {"wrapperType": "collection", "collectionId": 1, "collectionName": "A",
+                 "artistName": "X", "releaseDate": "2000-01-01T00:00:00Z", "copyright": ""},
+                {"wrapperType": "track", "trackId": 101, "trackName": "D1T1",
+                 "trackNumber": 1, "discNumber": 1, "artistName": "X",
+                 "collectionName": "A", "collectionId": 1, "artworkUrl100": ""},
+                {"wrapperType": "track", "trackId": 201, "trackName": "D2T1",
+                 "trackNumber": 1, "discNumber": 2, "artistName": "X",
+                 "collectionName": "A", "collectionId": 1, "artworkUrl100": ""},
+                {"wrapperType": "track", "trackId": 102, "trackName": "D1T2",
+                 "trackNumber": 2, "discNumber": 1, "artistName": "X",
+                 "collectionName": "A", "collectionId": 1, "artworkUrl100": ""},
+                {"wrapperType": "track", "trackId": 202, "trackName": "D2T2",
+                 "trackNumber": 2, "discNumber": 2, "artistName": "X",
+                 "collectionName": "A", "collectionId": 1, "artworkUrl100": ""},
+            ],
+        }
+        mock_resp = make_mock_response(response)
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            tracks = get_album_tracks(1)
+        assert [t["name"] for t in tracks] == ["D1T1", "D1T2", "D2T1", "D2T2"]
+
 
 class TestGetTrack:
     def test_returns_single_item_list(self):

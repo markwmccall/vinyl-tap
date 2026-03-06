@@ -36,9 +36,21 @@ def probe(speaker_ip, sn, query):
 
     service_name = apple_names[0]
     print(f"\n--- Using service: '{service_name}' ---")
-    svc = MusicService(service_name, soco_instance=speaker)
 
-    # Show account/token info
+    # Find the linked account for Apple Music on this speaker
+    try:
+        from soco.music_services import MusicServiceAccount
+        all_accounts = MusicServiceAccount.get_accounts()
+        print(f"    All accounts: {list(all_accounts.keys())}")
+        account = all_accounts.get(service_name)
+        print(f"    Account for '{service_name}': {account}")
+    except Exception as e:
+        account = None
+        print(f"    (could not get accounts: {e})")
+
+    svc = MusicService(service_name, account=account)
+
+    # Show service info
     try:
         print(f"    Service ID: {svc.service_id}")
         print(f"    Account: {svc.account}")

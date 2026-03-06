@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %} - Music Services{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+  <a href="{{ url_for('settings') }}" class="settings-back">&#8249; Settings</a>
+  <h1>Music Services</h1>
+
+  {% if error %}
+  <div class="banner error">{{ error }}</div>
+  <script>history.replaceState(null, '', '/settings/music-services');</script>
+  {% elif success %}
+  <div class="banner success">Authorization complete. Apple Music search is now available.</div>
+  <script>history.replaceState(null, '', '/settings/music-services');</script>
+  {% endif %}
+
+  <div class="hw-section">
+    <div class="hw-section-title">Apple Music</div>
+
+    {% if not speaker_ip %}
+    <p class="hint">No speaker configured. Set a speaker IP in <a href="{{ url_for('settings_sonos') }}">Sonos settings</a> first.</p>
+
+    {% elif service_error %}
+    <div class="hw-row">
+      <span class="hw-label">Status</span>
+      <span class="hw-value hw-warn">Cannot connect to speaker</span>
+    </div>
+    <p class="hint">{{ service_error }}</p>
+
+    {% else %}
+    <div class="hw-row">
+      <span class="hw-label">Status</span>
+      <span class="hw-value {% if authorized %}hw-ok{% else %}hw-warn{% endif %}">
+        {{ 'Authorized' if authorized else 'Not authorized' }}
+      </span>
+    </div>
+
+    {% if pending %}
+    <div class="field">
+      <label>Step 2: Authorize on your phone</label>
+      <p class="hint">Open the link below (it will open the Sonos or Apple Music app). Tap <strong>Allow</strong>, then come back here and click Complete.</p>
+      <p><a href="{{ pending.reg_url }}" target="_blank" class="auth-link">{{ pending.reg_url }}</a></p>
+      <form method="POST" action="/settings/music-services/complete">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="save-btn">I've Authorized — Complete</button>
+      </form>
+    </div>
+
+    {% elif not authorized %}
+    <div class="field">
+      <label>Authorize Apple Music</label>
+      <p class="hint">This allows the device to search Apple Music via Sonos — including your personal library and playlists. You will be directed to an authorization page.</p>
+      <form method="POST" action="/settings/music-services/begin">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="save-btn">Begin Authorization</button>
+      </form>
+    </div>
+
+    {% else %}
+    <div class="field">
+      <label>Test Search</label>
+      <p class="hint">Search your Apple Music library via Sonos SMAPI.</p>
+      <form method="GET" action="/settings/music-services" class="search-row">
+        <input type="text" name="query" value="{{ query }}" placeholder="Album name..." class="search-input">
+        <button type="submit" class="save-btn">Search</button>
+      </form>
+
+      {% if search_error %}
+      <p class="hint hw-warn">Search error: {{ search_error }}</p>
+      {% elif search_results is not none %}
+        {% if search_results %}
+        <ul class="search-results">
+          {% for r in search_results %}
+          <li>{{ r.title }} <span class="hw-value" style="font-size:0.8rem">{{ r.id }}</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="hint">No results found.</p>
+        {% endif %}
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

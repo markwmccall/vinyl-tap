@@ -19,6 +19,13 @@ import apple_music
 from nfc_interface import MockNFC, PN532NFC, parse_tag_data
 from sonos_controller import detect_apple_music_sn, get_now_playing, get_speakers, get_volume, next_track, pause, play_album, prev_track, resume, set_volume, stop
 
+try:
+    import soco as _soco
+    from soco.music_services import MusicService as _MusicService
+    _SOCO_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _SOCO_AVAILABLE = False
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
@@ -577,6 +584,98 @@ def settings_hardware():
     hw = _get_hardware_stats()
     return render_template("settings_hardware.html", csrf_token=session["csrf_token"],
                            restarting=restarting, rebooting=rebooting, hw=hw)
+
+
+def _get_apple_music_service(speaker_ip):
+    """Return (MusicService, household_id) or raise on failure."""
+    speaker = _soco.SoCo(speaker_ip)
+    svc = _MusicService("Apple Music", device=speaker)
+    return svc, speaker.household_id
+
+
+@app.route("/settings/music-services")
+def settings_music_services():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    config = _load_config()
+    speaker_ip = config.get("speaker_ip", "")
+
+    ctx = {
+        "csrf_token": session["csrf_token"],
+        "speaker_ip": speaker_ip,
+        "authorized": False,
+        "service_error": None,
+        "pending": session.get("smapi_auth_pending"),
+        "success": session.pop("smapi_auth_success", False),
+        "error": session.pop("smapi_auth_error", None),
+        "query": request.args.get("query", "").strip(),
+        "search_results": None,
+        "search_error": None,
+    }
+
+    if speaker_ip and _SOCO_AVAILABLE:
+        try:
+            svc, hid = _get_apple_music_service(speaker_ip)
+            ctx["authorized"] = svc.soap_client.token_store.has_token(svc.service_id, hid)
+        except Exception as e:
+            ctx["service_error"] = str(e)
+
+    if ctx["query"] and ctx["authorized"] and _SOCO_AVAILABLE:
+        try:
+            svc, _ = _get_apple_music_service(speaker_ip)
+            items = list(svc.search("albums", term=ctx["query"]))
+            ctx["search_results"] = [
+                {"title": getattr(it, "title", str(it)), "id": getattr(it, "item_id", "")}
+                for it in items[:10]
+            ]
+        except Exception as e:
+            ctx["search_error"] = str(e)
+
+    return render_template("settings_music_services.html", **ctx)
+
+
+@app.route("/settings/music-services/begin", methods=["POST"])
+def settings_music_services_begin():
+    token = request.form.get("csrf_token", "")
+    if not token or token != session.get("csrf_token"):
+        abort(403)
+    config = _load_config()
+    speaker_ip = config.get("speaker_ip", "")
+    if speaker_ip and _SOCO_AVAILABLE:
+        try:
+            svc, _ = _get_apple_music_service(speaker_ip)
+            reg_url, link_code, link_device_id = svc.soap_client.begin_authentication()
+            session["smapi_auth_pending"] = {
+                "reg_url": reg_url,
+                "link_code": link_code,
+                "link_device_id": link_device_id,
+            }
+        except Exception as e:
+            session["smapi_auth_error"] = str(e)
+    return redirect(url_for("settings_music_services"))
+
+
+@app.route("/settings/music-services/complete", methods=["POST"])
+def settings_music_services_complete():
+    token = request.form.get("csrf_token", "")
+    if not token or token != session.get("csrf_token"):
+        abort(403)
+    pending = session.get("smapi_auth_pending")
+    if not pending:
+        return redirect(url_for("settings_music_services"))
+    config = _load_config()
+    speaker_ip = config.get("speaker_ip", "")
+    if speaker_ip and _SOCO_AVAILABLE:
+        try:
+            svc, _ = _get_apple_music_service(speaker_ip)
+            svc.soap_client.complete_authentication(
+                pending["link_code"], pending.get("link_device_id")
+            )
+            session.pop("smapi_auth_pending", None)
+            session["smapi_auth_success"] = True
+        except Exception as e:
+            session["smapi_auth_error"] = str(e)
+    return redirect(url_for("settings_music_services"))
 
 
 _PLACEHOLDERS = {

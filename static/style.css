@@ -604,3 +604,11 @@ main.has-now-playing { padding-bottom: 5rem; }
 .hw-ok { color: var(--ok-text); }
 .hw-warn { color: var(--warn-text); }
 .hw-actions { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+
+/* Music Services auth page */
+.auth-link { display: block; word-break: break-all; color: var(--accent); font-size: 0.85rem; margin: 0.5rem 0 1rem; }
+.search-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.search-input { flex: 1; }
+.search-results { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+.search-results li { padding: 0.4rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.9rem; }
+.search-results li:last-child { border-bottom: none; }

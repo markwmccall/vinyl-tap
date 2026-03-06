@@ -12,7 +12,8 @@
   <p>Restart the Raspberry Pi. The web UI will be unavailable for ~30 seconds.</p>
   <form method="POST" action="/settings/reboot">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit" class="save-btn reboot-btn">Reboot Raspberry Pi</button>
+    <button type="submit" class="save-btn reboot-btn"
+            onclick="return confirm('Reboot the Raspberry Pi?')">Reboot Raspberry Pi</button>
   </form>
   {% endif %}
 </div>

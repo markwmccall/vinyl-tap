@@ -76,6 +76,11 @@ sudo systemctl enable vinyl-web
 sudo systemctl restart vinyl-web
 echo "      Service installed, enabled, and restarted"
 
+# Sudoers: allow the service user to restart vinyl-web (needed by updater)
+echo "$USERNAME ALL=(ALL) NOPASSWD: /bin/systemctl restart vinyl-web" \
+    | sudo tee /etc/sudoers.d/vinyl-emulator-update > /dev/null
+sudo chmod 440 /etc/sudoers.d/vinyl-emulator-update
+
 # Remove obsolete sudoers entry if present
 sudo rm -f /etc/sudoers.d/vinyl-emulator
 

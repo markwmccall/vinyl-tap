@@ -19,9 +19,9 @@
       <span class="settings-row-title">Logs</span>
       <span class="settings-chevron">&#8250;</span>
     </a></li>
-    <li><a href="/settings/update" class="settings-row settings-row-disabled">
+    <li><a href="{{ url_for('settings_update') }}" class="settings-row">
       <span class="settings-row-title">Update</span>
-      <span class="settings-row-detail">Coming soon</span>
+      <span class="settings-row-detail">v{{ app_version }}</span>
       <span class="settings-chevron">&#8250;</span>
     </a></li>
     <li><a href="{{ url_for('settings_sticker') }}" class="settings-row">

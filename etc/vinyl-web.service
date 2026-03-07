@@ -8,6 +8,7 @@ ExecStart=authbind --deep /home/pi/vinyl-emulator/.venv/bin/python3 /home/pi/vin
 WorkingDirectory=/home/pi/vinyl-emulator
 Restart=on-failure
 RestartSec=5
+KillMode=process
 MemoryLimit=256M
 User=pi
 

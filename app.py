@@ -10,8 +10,10 @@ import sys
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 import psutil
+from packaging.version import Version
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 
@@ -22,10 +24,26 @@ from sonos_controller import detect_apple_music_sn, get_now_playing, get_speaker
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-TAGS_PATH = os.path.join(os.path.dirname(__file__), "tags.json")
+PROJECT_ROOT = Path(__file__).parent
+CONFIG_PATH = str(PROJECT_ROOT / "config.json")
+TAGS_PATH = str(PROJECT_ROOT / "tags.json")
+UPDATE_LOG = PROJECT_ROOT / "update.log"
+UPDATER_PATH = PROJECT_ROOT / "updater.py"
+
+_VERSION_FILE = PROJECT_ROOT / "VERSION"
+VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else "0.0.0"
+
+# Cache for GitHub release check: (timestamp, result_dict)
+_update_cache = None  # type: tuple | None  (timestamp, result_dict)
+_UPDATE_CACHE_TTL = 3600  # 1 hour
+GITHUB_REPO = "markwmccall/vinyl-emulator"
 
 log = logging.getLogger(__name__)
+
+
+@app.context_processor
+def _inject_version():
+    return {"app_version": VERSION}
 
 # Shared NFC device and lock used by the background polling thread and web routes.
 _nfc_lock = threading.Lock()
@@ -581,10 +599,119 @@ def settings_hardware():
 
 
 _PLACEHOLDERS = {
-    "update":  ("Update",  "Coming soon - depends on issue #12"),
     "storage": ("Storage", "Coming soon - depends on issue #18"),
     "network": ("Network", "Coming soon - depends on issue #19"),
 }
+
+
+def _check_for_update() -> dict:
+    """Return update info, using a 1-hour in-memory cache."""
+    global _update_cache
+    now = time.time()
+    if _update_cache and now - _update_cache[0] < _UPDATE_CACHE_TTL:
+        return _update_cache[1]
+
+    result = {"current": VERSION, "latest": VERSION, "update_available": False}
+    try:
+        import requests as _req
+        resp = _req.get(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            timeout=5,
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        latest = data.get("tag_name", "").lstrip("v")
+        if latest:
+            result["latest"] = latest
+            result["update_available"] = Version(latest) > Version(VERSION)
+    except Exception:
+        pass  # fail open: return current version, no update available
+
+    _update_cache = (now, result)
+    return result
+
+
+def _read_update_state():
+    """Return (state, log_lines) from update.log. state is 'idle' if no log."""
+    if not UPDATE_LOG.exists():
+        return "idle", []
+    lines = UPDATE_LOG.read_text().splitlines()
+    state = "idle"
+    for line in lines:
+        if line.startswith("STATE:"):
+            state = line.split(":", 1)[1].strip()
+    return state, lines[-20:]
+
+
+@app.route("/settings/update")
+def settings_update():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    config = _load_config()
+    nfc_mode = config.get("nfc_mode", "mock")
+    update_info = _check_for_update() if nfc_mode == "pn532" else None
+    state, log_lines = _read_update_state()
+    return render_template(
+        "settings_update.html",
+        csrf_token=session["csrf_token"],
+        version=VERSION,
+        update_info=update_info,
+        nfc_mode=nfc_mode,
+        update_state=state,
+        log_lines=log_lines,
+        auto_update=config.get("auto_update", False),
+        updating=request.args.get("updating") == "1",
+    )
+
+
+@app.route("/update/check")
+def update_check():
+    return jsonify(_check_for_update())
+
+
+@app.route("/update/apply", methods=["POST"])
+def update_apply():
+    token = request.form.get("csrf_token", "")
+    if not token or token != session.get("csrf_token"):
+        abort(403)
+    state, _ = _read_update_state()
+    if state == "running":
+        return jsonify({"error": "Update already in progress"}), 409
+    info = _check_for_update()
+    target = info.get("latest", VERSION)
+    log_file = open(UPDATE_LOG, "w")
+    subprocess.Popen(
+        [sys.executable, str(UPDATER_PATH), target],
+        cwd=str(PROJECT_ROOT),
+        start_new_session=True,
+        stdout=log_file,
+        stderr=log_file,
+    )
+    return redirect(url_for("settings_update", updating=1))
+
+
+@app.route("/update/status")
+def update_status():
+    state, lines = _read_update_state()
+    return jsonify({"state": state, "log": lines})
+
+
+@app.route("/update/auto", methods=["POST"])
+def update_auto():
+    token = request.form.get("csrf_token", "")
+    if not token or token != session.get("csrf_token"):
+        abort(403)
+    config = _load_config()
+    config["auto_update"] = request.form.get("auto_update") == "1"
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+    return redirect(url_for("settings_update"))
+
+
+@app.route("/api/version")
+def api_version():
+    return jsonify({"version": VERSION})
 
 
 @app.route("/settings/<section>")
@@ -789,6 +916,33 @@ def logs():
     return render_template("logs.html", log_output=log_output)
 
 
+def _auto_update_loop():
+    """Check once per day and apply update automatically if auto_update=true."""
+    while True:
+        time.sleep(86400)
+        try:
+            config = _load_config()
+            if not config.get("auto_update"):
+                continue
+            info = _check_for_update()
+            if not info.get("update_available"):
+                continue
+            state, _ = _read_update_state()
+            if state == "running":
+                continue
+            target = info["latest"]
+            log_file = open(UPDATE_LOG, "w")
+            subprocess.Popen(
+                [sys.executable, str(UPDATER_PATH), target],
+                cwd=str(PROJECT_ROOT),
+                start_new_session=True,
+                stdout=log_file,
+                stderr=log_file,
+            )
+        except Exception:
+            pass
+
+
 def _sigterm_handler(signum, frame):
     """Wait for any in-progress NFC I2C operation to finish before exiting.
 
@@ -810,4 +964,5 @@ if __name__ == "__main__":  # pragma: no cover
                         help="Port to listen on (use 80 with authbind on Pi)")
     args = parser.parse_args()
     _start_nfc_thread(CONFIG_PATH)
+    threading.Thread(target=_auto_update_loop, daemon=True).start()
     app.run(host=args.host, port=args.port)

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %} - Update{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+  <a href="{{ url_for('settings') }}" class="settings-back">&#8249; Settings</a>
+  <h1>Update</h1>
+
+  <div class="hw-section">
+    <div class="hw-section-title">Version</div>
+    <div class="hw-row">
+      <span class="hw-label">Current</span>
+      <span class="hw-value">v{{ version }}</span>
+    </div>
+
+    {% if nfc_mode != 'pn532' %}
+    <p class="hint">Updates are only available when running on a Raspberry Pi.</p>
+
+    {% else %}
+
+    {% if update_info %}
+    <div class="hw-row">
+      <span class="hw-label">Latest</span>
+      <span class="hw-value {% if update_info.update_available %}hw-warn{% else %}hw-ok{% endif %}">
+        v{{ update_info.latest }}
+        {% if not update_info.update_available %} &mdash; up to date{% endif %}
+      </span>
+    </div>
+    {% endif %}
+
+    {% if update_state == 'running' or updating %}
+    <div class="banner warning" id="update-progress-banner">
+      Updating&hellip; do not close this page.
+    </div>
+    <div class="update-log" id="update-log">
+      {% for line in log_lines %}<div>{{ line }}</div>{% endfor %}
+    </div>
+
+    {% elif update_state == 'success' %}
+    <div class="banner success">Update complete. Running v{{ version }}.</div>
+
+    {% elif update_state == 'failed' %}
+    <div class="banner error">Update failed &mdash; rolled back to previous version. Check logs for details.</div>
+    <div class="update-log">
+      {% for line in log_lines %}<div>{{ line }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if update_info and update_info.update_available and update_state != 'running' %}
+    <div class="field" style="margin-top:1rem">
+      <form method="POST" action="/update/apply">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="save-btn"
+                onclick="return confirm('Update to v{{ update_info.latest }}?')">
+          Update to v{{ update_info.latest }}
+        </button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="hw-section" style="margin-top:1.5rem">
+      <div class="hw-section-title">Auto-Update</div>
+      <form method="POST" action="/update/auto" id="auto-update-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="hw-row">
+          <span class="hw-label">Automatically install updates</span>
+          <label class="toggle">
+            <input type="checkbox" name="auto_update" value="1"
+                   {% if auto_update %}checked{% endif %}
+                   onchange="document.getElementById('auto-update-form').submit()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </form>
+      <p class="hint">When enabled, updates are checked and applied daily.</p>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
+
+{% if update_state == 'running' or updating %}
+<script>
+  function pollUpdate() {
+    fetch('/update/status')
+      .then(r => r.json())
+      .then(data => {
+        const logEl = document.getElementById('update-log');
+        if (logEl && data.log) {
+          logEl.innerHTML = data.log.map(l => '<div>' + l + '</div>').join('');
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+        if (data.state === 'running') {
+          setTimeout(pollUpdate, 2000);
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(() => setTimeout(pollUpdate, 3000));
+  }
+  setTimeout(pollUpdate, 2000);
+</script>
+{% endif %}
+{% endblock %}

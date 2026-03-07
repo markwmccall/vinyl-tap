@@ -804,7 +804,7 @@ class TestSettingsRestart:
 
 
 class TestSettingsPlaceholder:
-    @pytest.mark.parametrize("section", ["update", "storage", "network"])
+    @pytest.mark.parametrize("section", ["storage", "network"])
     def test_known_sections_return_200(self, client, temp_config, section):
         resp = client.get(f"/settings/{section}")
         assert resp.status_code == 200
@@ -814,8 +814,9 @@ class TestSettingsPlaceholder:
         assert resp.status_code == 404
 
     def test_renders_title_and_note(self, client, temp_config):
-        resp = client.get("/settings/update")
-        assert b"Update" in resp.data
+        # "update" is no longer a placeholder — it has its own page
+        resp = client.get("/settings/storage")
+        assert b"Storage" in resp.data
         assert b"Coming soon" in resp.data
 
 
@@ -1639,3 +1640,264 @@ class TestSigtermHandler:
         with pytest.raises(SystemExit):
             app._sigterm_handler(None, None)
         mock_lock.acquire.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Issue #12: Versioning, Release & In-App Update
+# ---------------------------------------------------------------------------
+
+class TestApiVersion:
+    def test_returns_200(self, client):
+        resp = client.get("/api/version")
+        assert resp.status_code == 200
+
+    def test_returns_version_key(self, client):
+        resp = client.get("/api/version")
+        data = resp.get_json()
+        assert "version" in data
+        assert isinstance(data["version"], str)
+        assert data["version"]  # non-empty
+
+
+class TestSettingsUpdatePage:
+    def test_get_returns_200(self, client, temp_config):
+        resp = client.get("/settings/update")
+        assert resp.status_code == 200
+
+    def test_shows_current_version(self, client, temp_config):
+        import app
+        resp = client.get("/settings/update")
+        assert app.VERSION.encode() in resp.data
+
+    def test_mock_mode_hides_update_controls(self, client, temp_config):
+        # temp_config sets nfc_mode=mock; update controls should not appear
+        resp = client.get("/settings/update")
+        assert b"update-controls" not in resp.data
+
+    def test_pn532_mode_shows_update_info(self, client, tmp_path, monkeypatch):
+        import app, json
+        config_file = tmp_path / "config_pi.json"
+        config_file.write_text(json.dumps({
+            "sn": "3", "speaker_ip": "10.0.0.12", "nfc_mode": "pn532"
+        }))
+        monkeypatch.setattr(app, "CONFIG_PATH", str(config_file))
+        monkeypatch.setattr(app, "_update_cache", None)
+        with patch("app._check_for_update", return_value={
+            "current": "0.1.0", "latest": "0.1.0", "update_available": False
+        }):
+            resp = client.get("/settings/update")
+        # pn532 mode shows the latest version info
+        assert b"up to date" in resp.data
+
+    def test_updating_flag_shows_log_section(self, client, temp_config):
+        resp = client.get("/settings/update?updating=1")
+        assert resp.status_code == 200
+        # updating=1 triggers live log polling section
+        assert b"update-log" in resp.data or b"pollUpdate" in resp.data
+
+
+class TestUpdateCheck:
+    @pytest.fixture(autouse=True)
+    def reset_cache(self, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "_update_cache", None)
+
+    def test_returns_current_version(self, client):
+        import app
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.raise_for_status = MagicMock()
+            mock_get.return_value.json.return_value = {"tag_name": "v" + app.VERSION}
+            resp = client.get("/update/check")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["current"] == app.VERSION
+
+    def test_update_available_when_newer_version(self, client):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.raise_for_status = MagicMock()
+            mock_get.return_value.json.return_value = {"tag_name": "v99.0.0"}
+            resp = client.get("/update/check")
+        data = resp.get_json()
+        assert data["update_available"] is True
+        assert data["latest"] == "99.0.0"
+
+    def test_no_update_when_same_version(self, client):
+        import app
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.raise_for_status = MagicMock()
+            mock_get.return_value.json.return_value = {"tag_name": "v" + app.VERSION}
+            resp = client.get("/update/check")
+        data = resp.get_json()
+        assert data["update_available"] is False
+
+    def test_returns_safe_result_on_network_error(self, client):
+        with patch("requests.get", side_effect=Exception("timeout")):
+            resp = client.get("/update/check")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["update_available"] is False
+
+    def test_cache_populated_after_first_call(self, client):
+        import app
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.raise_for_status = MagicMock()
+            mock_get.return_value.json.return_value = {"tag_name": "v99.0.0"}
+            client.get("/update/check")
+        assert app._update_cache is not None
+        assert app._update_cache[1]["latest"] == "99.0.0"
+
+    def test_cache_returned_on_second_call(self, client):
+        import app
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.raise_for_status = MagicMock()
+            mock_get.return_value.json.return_value = {"tag_name": "v99.0.0"}
+            client.get("/update/check")
+            client.get("/update/check")
+        assert mock_get.call_count == 1  # second call used cache
+
+
+class TestUpdateApply:
+    @pytest.fixture(autouse=True)
+    def reset_cache(self, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "_update_cache", None)
+
+    def test_missing_csrf_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/update/apply", data={})
+        assert resp.status_code == 403
+
+    def test_wrong_csrf_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/update/apply", data={"csrf_token": "wrong"})
+        assert resp.status_code == 403
+
+    def test_update_already_running_returns_409(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        log.write_text("STATE: running\n")
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/update/apply", data={"csrf_token": "test-token"})
+        assert resp.status_code == 409
+
+    def test_valid_request_launches_updater(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        monkeypatch.setattr(app, "_update_cache", None)
+        with patch("app._check_for_update", return_value={
+            "current": "0.1.0", "latest": "1.0.0", "update_available": True
+        }):
+            with patch("subprocess.Popen") as mock_popen:
+                with client.session_transaction() as sess:
+                    sess["csrf_token"] = "test-token"
+                resp = client.post("/update/apply", data={"csrf_token": "test-token"})
+        assert resp.status_code == 302
+        assert mock_popen.called
+        call_args = mock_popen.call_args[0][0]
+        assert "updater.py" in call_args[1]
+        assert call_args[2] == "1.0.0"
+
+    def test_valid_request_redirects_to_settings_update(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        with patch("app._check_for_update", return_value={
+            "current": "0.1.0", "latest": "0.1.0", "update_available": False
+        }):
+            with patch("subprocess.Popen"):
+                with client.session_transaction() as sess:
+                    sess["csrf_token"] = "test-token"
+                resp = client.post("/update/apply", data={"csrf_token": "test-token"})
+        assert "/settings/update" in resp.headers["Location"]
+        assert "updating=1" in resp.headers["Location"]
+
+
+class TestUpdateStatus:
+    def test_returns_idle_when_no_log(self, client, tmp_path, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "UPDATE_LOG", tmp_path / "no_update.log")
+        resp = client.get("/update/status")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["state"] == "idle"
+        assert data["log"] == []
+
+    def test_parses_running_state(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        log.write_text("STATE: running\nDownloading...\n")
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        resp = client.get("/update/status")
+        data = resp.get_json()
+        assert data["state"] == "running"
+
+    def test_parses_success_state(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        log.write_text("STATE: running\nInstalling...\nSTATE: success\n")
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        resp = client.get("/update/status")
+        data = resp.get_json()
+        assert data["state"] == "success"
+
+    def test_parses_failed_state(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        log.write_text("STATE: running\nError: something\nSTATE: failed\n")
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        resp = client.get("/update/status")
+        data = resp.get_json()
+        assert data["state"] == "failed"
+
+    def test_returns_last_20_lines(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        lines = [f"line {i}" for i in range(30)] + ["STATE: running"]
+        log.write_text("\n".join(lines) + "\n")
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        resp = client.get("/update/status")
+        data = resp.get_json()
+        assert len(data["log"]) == 20
+
+    def test_includes_log_lines(self, client, tmp_path, monkeypatch):
+        import app
+        log = tmp_path / "update.log"
+        log.write_text("Fetching tags\nInstalling deps\nSTATE: success\n")
+        monkeypatch.setattr(app, "UPDATE_LOG", log)
+        resp = client.get("/update/status")
+        data = resp.get_json()
+        assert any("Fetching" in line for line in data["log"])
+
+
+class TestUpdateAuto:
+    def test_missing_csrf_returns_403(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/update/auto", data={})
+        assert resp.status_code == 403
+
+    def test_enables_auto_update(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/update/auto", data={"csrf_token": "test-token", "auto_update": "1"})
+        assert resp.status_code == 302
+        config = json.loads(temp_config.read_text())
+        assert config["auto_update"] is True
+
+    def test_disables_auto_update(self, client, temp_config):
+        with client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+        resp = client.post("/update/auto", data={"csrf_token": "test-token"})
+        assert resp.status_code == 302
+        config = json.loads(temp_config.read_text())
+        assert config["auto_update"] is False

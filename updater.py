@@ -48,12 +48,16 @@ def main(target_version: str) -> None:
         print("Error: git fetch failed", flush=True)
         return
 
-    # Checkout the target release tag
+    # Ensure we're on main branch (may be detached after a previous update)
+    run(["git", "checkout", "main"], cwd=PROJECT_ROOT)
+
+    # Move main to the target release tag (stays on branch, no detached HEAD)
     tag = f"v{target_version}"
-    result = run(["git", "checkout", tag], cwd=PROJECT_ROOT)
+    result = run(["git", "reset", "--hard", tag], cwd=PROJECT_ROOT)
     if result.returncode != 0:
         print(f"STATE: failed", flush=True)
-        print(f"Error: git checkout {tag} failed", flush=True)
+        print(f"Error: git reset --hard {tag} failed", flush=True)
+        run(["git", "reset", "--hard", rollback_commit], cwd=PROJECT_ROOT)
         return
 
     # Install/update Python dependencies
@@ -61,7 +65,7 @@ def main(target_version: str) -> None:
     result = run([pip, "install", "-r", "requirements.txt"], cwd=PROJECT_ROOT)
     if result.returncode != 0:
         print("Dependency install failed — rolling back", flush=True)
-        run(["git", "checkout", rollback_commit], cwd=PROJECT_ROOT)
+        run(["git", "reset", "--hard", rollback_commit], cwd=PROJECT_ROOT)
         print("STATE: failed", flush=True)
         return
 
@@ -94,7 +98,7 @@ def main(target_version: str) -> None:
         ROLLBACK_FILE.unlink(missing_ok=True)
     else:
         print("Health check timed out — rolling back", flush=True)
-        run(["git", "checkout", rollback_commit], cwd=PROJECT_ROOT)
+        run(["git", "reset", "--hard", rollback_commit], cwd=PROJECT_ROOT)
         run(["sudo", "systemctl", "restart", "vinyl-web"])
         print("STATE: failed", flush=True)
 

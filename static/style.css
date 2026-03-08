@@ -19,6 +19,9 @@
   --text-3: #777;
   --text-4: #999;
 
+  /* Accent (toggle enabled state) */
+  --accent: #1e40af;
+
   /* Buttons — primary (play, look up) */
   --btn-primary: #1e40af;
   --btn-primary-hover: #2752d4;

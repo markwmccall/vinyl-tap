@@ -275,17 +275,32 @@ def _nfc_loop(config_path):
     """
     global _nfc_last_tag
     consecutive_errors = 0
+    polls_since_log = 0
+    error_start_time = None
+    _NFC_HEARTBEAT_POLLS = 3600  # log heartbeat roughly every 30 min (at ~0.5s/poll)
     while True:
         try:
             with _nfc_lock:
                 tag_data = _nfc.read_tag()
             if consecutive_errors:
-                log.info("NFC reader recovered after %d consecutive errors", consecutive_errors)
+                outage_secs = time.time() - error_start_time if error_start_time else 0
+                log.info(
+                    "NFC reader recovered after %d consecutive errors (outage %.0fs)",
+                    consecutive_errors, outage_secs,
+                )
+                error_start_time = None
             consecutive_errors = 0
+            polls_since_log += 1
+            if polls_since_log >= _NFC_HEARTBEAT_POLLS:
+                log.info("NFC heartbeat: reader healthy, polling normally")
+                polls_since_log = 0
         except Exception as e:
             consecutive_errors += 1
+            if consecutive_errors == 1:
+                error_start_time = time.time()
             if consecutive_errors < _NFC_MAX_CONSECUTIVE_ERRORS:
-                log.error("NFC read error: %s", e)
+                log.error("NFC read error (%d/%d): %s",
+                          consecutive_errors, _NFC_MAX_CONSECUTIVE_ERRORS, e)
             elif consecutive_errors == _NFC_MAX_CONSECUTIVE_ERRORS:
                 log.error(
                     "NFC reader unresponsive after %d consecutive errors (%s). "
@@ -294,8 +309,10 @@ def _nfc_loop(config_path):
                 )
                 try:
                     _nfc.reset()
-                    log.info("PN532 hardware reset successful")
+                    outage_secs = time.time() - error_start_time if error_start_time else 0
+                    log.info("PN532 hardware reset successful — recovered in %.0fs", outage_secs)
                     consecutive_errors = 0
+                    error_start_time = None
                     continue  # retry immediately, skip backoff
                 except Exception as reset_err:
                     log.error(

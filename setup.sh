@@ -33,7 +33,7 @@ echo "      I2C enabled and $USERNAME added to i2c group (takes effect after reb
 # instead of hanging the bus indefinitely. Without this, a bad PN532 state
 # (e.g. from a mid-transfer process kill) locks the I2C bus until power cycle.
 if ! grep -qs "i2c_bcm2835" /etc/modprobe.d/i2c-bcm2835.conf 2>/dev/null; then
-    echo "options i2c_bcm2835 timeout=200" | sudo tee /etc/modprobe.d/i2c-bcm2835.conf > /dev/null
+    echo "options i2c_bcm2835 clk_tout_ms=200" | sudo tee /etc/modprobe.d/i2c-bcm2835.conf > /dev/null
     echo "      BCM2835 I2C timeout set to 200ms (prevents NFC bus hang)"
 fi
 

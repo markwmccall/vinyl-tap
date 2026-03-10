@@ -19,7 +19,8 @@ case "${1:-status}" in
         sudo systemctl status vinyl-web
         ;;
     logs)
-        sudo journalctl -u vinyl-web -f
+        lines="${2:-50}"
+        sudo journalctl -u vinyl-web -n "$lines" -f
         ;;
     *)
         echo "Usage: $0 [start|stop|restart|status|logs]"

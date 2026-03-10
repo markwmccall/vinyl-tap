@@ -1010,9 +1010,9 @@ def logs():
 
 
 def _auto_update_loop():
-    """Check once per day and apply update automatically if auto_update=true."""
+    """Check once per hour and apply update automatically if auto_update=true."""
     while True:
-        time.sleep(86400)
+        time.sleep(3600)
         try:
             config = _load_config()
             if not config.get("auto_update"):

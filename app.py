@@ -1061,4 +1061,13 @@ if __name__ == "__main__":  # pragma: no cover
     args = parser.parse_args()
     _start_nfc_thread(CONFIG_PATH)
     threading.Thread(target=_auto_update_loop, daemon=True).start()
+    # Suppress werkzeug "development server" warning — this is a single-user
+    # Pi appliance, not a multi-tenant web service.
+    logging.getLogger("werkzeug").addFilter(
+        type("", (logging.Filter,), {
+            "filter": staticmethod(
+                lambda r: "development server" not in r.getMessage()
+            )
+        })()
+    )
     app.run(host=args.host, port=args.port)

@@ -76,7 +76,9 @@
     const sorted = sortTags(filtered, by);
     updateCount(filtered.length);
     list.innerHTML = sorted.map(t => {
-      const href = t.type === 'track' ? `/track/${t.track_id}` : `/album/${t.album_id}`;
+      const href = t.type === 'track' ? `/track/${t.track_id}`
+                : t.type === 'playlist' ? `/playlist/${encodeURIComponent(t.playlist_id)}`
+                : `/album/${t.album_id}`;
       const albumId = t.album_id || '';
       return `
         <li class="tag-item">

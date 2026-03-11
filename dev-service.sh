@@ -36,6 +36,7 @@ cmd_start() {
     return
   fi
   echo "[+] Starting vinyl-emulator on https://vinyl-mac.local ..."
+  sudo -v
   sudo "$VENV_PYTHON" "$APP" \
     --host 0.0.0.0 --port 443 \
     --ssl-cert "$CERT" --ssl-key "$KEY" \

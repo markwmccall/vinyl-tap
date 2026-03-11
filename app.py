@@ -568,6 +568,15 @@ def album(album_id):
     return render_template("album.html", album_id=album_id, tracks=tracks, show_now_playing=True)
 
 
+@app.route("/playlist/<playlist_id>")
+def playlist_page(playlist_id):
+    provider = get_provider("apple")
+    info = provider.get_playlist_info(playlist_id)
+    if not info:
+        abort(404)
+    return render_template("playlist.html", playlist_id=playlist_id, info=info, show_now_playing=True)
+
+
 @app.route("/track/<int:track_id>")
 def track(track_id):
     tracks = get_provider("apple").get_track(track_id)
@@ -611,10 +620,11 @@ def not_found(e):
 @app.route("/write-tag", methods=["POST"])
 def write_tag():
     data = request.get_json()
-    if not data or ("track_id" not in data and "album_id" not in data):
-        return jsonify({"error": "album_id or track_id required"}), 400
+    if not data or ("track_id" not in data and "album_id" not in data and "playlist_id" not in data):
+        return jsonify({"error": "album_id, track_id, or playlist_id required"}), 400
     config = _load_config()
     tag_data = (f"apple:track:{data['track_id']}" if "track_id" in data
+                else f"apple:playlist:{data['playlist_id']}" if "playlist_id" in data
                 else f"apple:{data['album_id']}")
     force = data.get("force", False)
 
@@ -694,18 +704,24 @@ def write_url_tag():
 @app.route("/play", methods=["POST"])
 def play():
     data = request.get_json()
-    if not data or ("track_id" not in data and "album_id" not in data):
-        return jsonify({"error": "album_id or track_id required"}), 400
+    if not data or ("track_id" not in data and "album_id" not in data and "playlist_id" not in data):
+        return jsonify({"error": "album_id, track_id, or playlist_id required"}), 400
     config = _load_config()
     provider = get_provider("apple")
-    if "track_id" in data:
-        tracks = provider.get_track(data["track_id"])
+    if "playlist_id" in data:
+        info = provider.get_playlist_info(data["playlist_id"]) or {}
+        play_playlist(config["speaker_ip"], data["playlist_id"], info.get("title", ""),
+                      provider, config["sn"],
+                      speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     else:
-        tracks = provider.get_album_tracks(data["album_id"])
-    if not tracks:
-        return jsonify({"error": "not found"}), 404
-    play_album(config["speaker_ip"], tracks, provider, config["sn"],
-               speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+        if "track_id" in data:
+            tracks = provider.get_track(data["track_id"])
+        else:
+            tracks = provider.get_album_tracks(data["album_id"])
+        if not tracks:
+            return jsonify({"error": "not found"}), 404
+        play_album(config["speaker_ip"], tracks, provider, config["sn"],
+                   speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     return jsonify({"status": "ok"})
 
 

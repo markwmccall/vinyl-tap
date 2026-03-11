@@ -284,7 +284,7 @@ class AppleMusicProvider(MusicProvider):
             ' xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"'
             ' xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/"'
             ' xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">'
-            f'<item id="{item_id}" parentID="{item_id}" restricted="true">'
+            f'<item id="{item_id}" parentID="-1" restricted="true">'
             f'<dc:title>{e(title)}</dc:title>'
             '<upnp:class>object.container.playlistContainer</upnp:class>'
             f'<desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">{e(udn)}</desc>'

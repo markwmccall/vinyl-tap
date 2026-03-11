@@ -151,12 +151,15 @@ def _do_play_playlist(speaker, playlist_id, title, provider, sn):
     udn = provider.lookup_udn(coordinator, sn)
     uri = provider.build_playlist_uri(playlist_id, sn)
     metadata = provider.build_playlist_didl(playlist_id, title, udn)
-    coordinator.avTransport.SetAVTransportURI([
+    coordinator.clear_queue()
+    coordinator.avTransport.AddURIToQueue([
         ("InstanceID", 0),
-        ("CurrentURI", uri),
-        ("CurrentURIMetaData", metadata),
+        ("EnqueuedURI", uri),
+        ("EnqueuedURIMetaData", metadata),
+        ("DesiredFirstTrackNumberEnqueued", 0),
+        ("EnqueueAsNext", 0),
     ])
-    coordinator.avTransport.Play([("InstanceID", 0), ("Speed", 1)])
+    coordinator.play_from_queue(0)
 
 
 def play_playlist(speaker_ip, playlist_id, title, provider, sn, speaker_name=None, config_path=None):

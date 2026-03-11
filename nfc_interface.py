@@ -97,8 +97,8 @@ class MockNFC:
 class PN532NFC:
     """Raspberry Pi NFC implementation using the Waveshare PN532 HAT via SPI.
 
-    Expects the HAT DIP switches configured for SPI mode (I0=L, I1=H).
-    Leave INT0 and RSTPDN unconnected — neither is needed in SPI mode.
+    Expects the HAT DIP switches configured for SPI mode (I0=L, I1=H) with
+    RSTPDN connected to D20 per Waveshare docs. Leave INT0 unconnected.
 
     SPI avoids the BCM2835 I2C clock-stretching problem entirely: the Pi
     master controls the clock, so the PN532 cannot hold it low and hang
@@ -112,7 +112,7 @@ class PN532NFC:
         from adafruit_pn532.spi import PN532_SPI
         spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
         cs = digitalio.DigitalInOut(board.CE0)
-        self._pn532 = PN532_SPI(spi, cs, debug=False)
+        self._pn532 = PN532_SPI(spi, cs, debug=False, reset=board.D20)
         self._pn532.SAM_configuration()
 
     def read_tag(self):

@@ -52,7 +52,8 @@ Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/). Select **
 Attach the PN532 NFC HAT to the Pi's 40-pin GPIO header. Before powering on, configure the HAT DIP switches for SPI mode as described in the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT):
 
 1. **Set SPI mode** — set I0 to L and I1 to H using the mode DIP switches.
-2. **Leave INT0 and RSTPDN unconnected** — neither is needed in SPI mode.
+2. **Connect RSTPDN to D20** — required per Waveshare docs; used by the library during initialization.
+3. **Leave INT0 unconnected.**
 
 Insert the SD card and power on. Wait about 60 seconds, then SSH in:
 

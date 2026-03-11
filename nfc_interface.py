@@ -103,6 +103,9 @@ class PN532NFC:
     SPI avoids the BCM2835 I2C clock-stretching problem entirely: the Pi
     master controls the clock, so the PN532 cannot hold it low and hang
     the bus.
+
+    Note: the Waveshare HAT routes NSS (chip select) to GPIO4 (D4), not the
+    standard SPI CE0 (GPIO8). CE0 is left unused.
     """
 
     def __init__(self):
@@ -111,7 +114,7 @@ class PN532NFC:
         import digitalio
         from adafruit_pn532.spi import PN532_SPI
         spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-        cs = digitalio.DigitalInOut(board.CE0)
+        cs = digitalio.DigitalInOut(board.D4)  # Waveshare HAT routes NSS to GPIO4 (D4), not CE0
         self._pn532 = PN532_SPI(spi, cs, debug=False, reset=board.D20)
         self._pn532.SAM_configuration()
 

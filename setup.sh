@@ -29,12 +29,14 @@ sudo raspi-config nonint do_spi 0
 sudo usermod -a -G spi "$USERNAME"
 echo "      SPI enabled and $USERNAME added to spi group (takes effect after reboot)"
 
-# On Raspberry Pi OS Bookworm the kernel SPI driver claims CE0 (GPIO8) by default,
-# which prevents the Adafruit Blinka library from also claiming it as a GPIO.
-# Disabling the default SPI overlay and letting Blinka manage CE0 directly fixes this.
-if ! grep -qs "dtoverlay=spi0-1cs,cs0_pin=8" /boot/firmware/config.txt 2>/dev/null; then
-    echo "dtoverlay=spi0-1cs,cs0_pin=8" | sudo tee -a /boot/firmware/config.txt > /dev/null
-    echo "      SPI CE0 overlay configured for Blinka compatibility"
+# The Waveshare PN532 HAT routes NSS (chip select) to GPIO4 (D4), not CE0.
+# Use spi0-0cs so the kernel does not claim any CE pins, leaving GPIO4 free
+# for Blinka to manage as a plain DigitalInOut chip select.
+if ! grep -qs "dtoverlay=spi0-0cs" /boot/firmware/config.txt 2>/dev/null; then
+    # Remove any old spi0-1cs overlay if present
+    sudo sed -i '/dtoverlay=spi0-1cs/d' /boot/firmware/config.txt
+    echo "dtoverlay=spi0-0cs" | sudo tee -a /boot/firmware/config.txt > /dev/null
+    echo "      SPI overlay configured (spi0-0cs, CE pins free for Blinka)"
 fi
 
 # --- authbind: allow the service user to bind port 80 ---

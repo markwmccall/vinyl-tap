@@ -1,6 +1,6 @@
 import json
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from tests.conftest import (
     SAMPLE_SEARCH_RESPONSE, SAMPLE_LOOKUP_RESPONSE,
     SAMPLE_SONG_SEARCH_RESPONSE, SAMPLE_TRACK_LOOKUP_RESPONSE,
@@ -8,6 +8,13 @@ from tests.conftest import (
 from providers.apple_music import AppleMusicProvider, _upgrade_artwork_url
 
 _p = AppleMusicProvider()
+
+
+def _make_smapi_provider():
+    """Create a provider with mock SMAPI client configured."""
+    p = AppleMusicProvider()
+    p.configure_smapi("tok", "key", "Sonos_hh_abc")
+    return p
 
 
 def make_mock_response(data):
@@ -169,3 +176,189 @@ class TestSearchSongs:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             results = _p.search_songs("xyznotasong")
         assert results == []
+
+
+# --- SMAPI integration tests ---
+
+class TestSmapiAvailable:
+    def test_not_available_by_default(self):
+        p = AppleMusicProvider()
+        assert not p.smapi_available
+
+    def test_available_after_configure(self):
+        p = _make_smapi_provider()
+        assert p.smapi_available
+
+
+class TestSmapiSearchAlbums:
+    def test_uses_smapi_when_configured(self):
+        p = _make_smapi_provider()
+        p._smapi.search = MagicMock(return_value=([
+            {"id": "album:1440902935", "title": "OK Computer",
+             "artist": "Radiohead", "item_type": "album",
+             "album_art_uri": "https://example.com/100x100bb.jpg"},
+        ], 1))
+        results = p.search_albums("Radiohead")
+
+        assert len(results) == 1
+        assert results[0]["id"] == 1440902935
+        assert results[0]["name"] == "OK Computer"
+        assert results[0]["artist"] == "Radiohead"
+        assert "600x600bb" in results[0]["artwork_url"]
+        p._smapi.search.assert_called_once_with("Radiohead")
+
+    def test_filters_non_album_items(self):
+        p = _make_smapi_provider()
+        p._smapi.search = MagicMock(return_value=([
+            {"id": "album:123", "title": "Album", "artist": "A", "item_type": "album"},
+            {"id": "track:456", "title": "Song", "artist": "A", "item_type": "track"},
+        ], 2))
+        results = p.search_albums("test")
+        assert len(results) == 1
+        assert results[0]["name"] == "Album"
+
+    def test_falls_back_to_itunes_on_smapi_error(self):
+        p = _make_smapi_provider()
+        from providers.smapi_client import SmapiError
+        p._smapi.search = MagicMock(side_effect=SmapiError("fail", "500"))
+        mock_resp = make_mock_response(SAMPLE_SEARCH_RESPONSE)
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            results = p.search_albums("Test Album")
+        assert len(results) == 1
+        assert results[0]["id"] == 1440903625
+
+
+class TestSmapiSearchSongs:
+    def test_uses_smapi_when_configured(self):
+        p = _make_smapi_provider()
+        p._smapi.search = MagicMock(return_value=([
+            {"id": "track:999", "title": "Creep", "artist": "Radiohead",
+             "album": "Pablo Honey", "item_type": "track",
+             "album_art_uri": "https://example.com/100x100bb.jpg"},
+        ], 1))
+        results = p.search_songs("Creep")
+
+        assert len(results) == 1
+        assert results[0]["id"] == 999
+        assert results[0]["name"] == "Creep"
+        assert results[0]["album"] == "Pablo Honey"
+
+    def test_filters_non_track_items(self):
+        p = _make_smapi_provider()
+        p._smapi.search = MagicMock(return_value=([
+            {"id": "album:123", "title": "Album", "artist": "A", "item_type": "album"},
+            {"id": "track:456", "title": "Song", "artist": "A", "item_type": "track"},
+        ], 2))
+        results = p.search_songs("test")
+        assert len(results) == 1
+        assert results[0]["name"] == "Song"
+
+
+class TestSmapiAutoRefresh:
+    def test_refreshes_token_on_auth_expired(self):
+        from providers.smapi_client import AuthTokenExpired
+        p = _make_smapi_provider()
+        callback = MagicMock()
+        p._on_token_refresh = callback
+
+        # First call raises AuthTokenExpired, refresh succeeds, second call works
+        p._smapi.search = MagicMock(side_effect=[
+            AuthTokenExpired("expired", "SOAP-ENV:Client-AuthTokenExpired"),
+            ([{"id": "album:1", "title": "A", "artist": "B", "item_type": "album"}], 1),
+        ])
+        p._smapi.refresh_auth_token = MagicMock(return_value=("new_tok", "new_key"))
+
+        results = p.search_albums("test")
+        assert len(results) == 1
+        p._smapi.refresh_auth_token.assert_called_once()
+        callback.assert_called_once_with("new_tok", "new_key")
+
+    def test_falls_back_to_itunes_if_refresh_also_fails(self):
+        from providers.smapi_client import AuthTokenExpired, SmapiError
+        p = _make_smapi_provider()
+        p._smapi.search = MagicMock(
+            side_effect=AuthTokenExpired("expired", "SOAP-ENV:Client-AuthTokenExpired")
+        )
+        p._smapi.refresh_auth_token = MagicMock(
+            side_effect=SmapiError("refresh failed", "500")
+        )
+        mock_resp = make_mock_response(SAMPLE_SEARCH_RESPONSE)
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            results = p.search_albums("Test Album")
+        # Falls through to iTunes
+        assert len(results) == 1
+        assert results[0]["id"] == 1440903625
+
+
+class TestConfigureSmapi:
+    def test_configure_smapi_on_app_startup(self, temp_config, monkeypatch):
+        """_configure_smapi reads tokens from config and calls provider.configure_smapi."""
+        import app
+        config = json.loads(temp_config.read_text())
+        config["services"] = {"apple": {
+            "sn": "3",
+            "smapi_token": "test_tok",
+            "smapi_key": "test_key",
+            "smapi_household_id": "Sonos_hh_test",
+        }}
+        temp_config.write_text(json.dumps(config))
+
+        # Reset provider to fresh state
+        from providers import _providers
+        from providers.apple_music import AppleMusicProvider
+        fresh = AppleMusicProvider()
+        _providers["apple"] = fresh
+
+        app._configure_smapi()
+        assert fresh.smapi_available
+        assert fresh._smapi.token == "test_tok"
+        assert fresh._smapi.household_id == "Sonos_hh_test"
+
+        # Restore original singleton
+        _providers["apple"] = AppleMusicProvider()
+
+    def test_configure_smapi_noop_without_tokens(self, temp_config, monkeypatch):
+        """_configure_smapi is a no-op when SMAPI tokens are not in config."""
+        import app
+        from providers import _providers
+        from providers.apple_music import AppleMusicProvider
+        fresh = AppleMusicProvider()
+        _providers["apple"] = fresh
+
+        app._configure_smapi()
+        assert not fresh.smapi_available
+
+        _providers["apple"] = AppleMusicProvider()
+
+
+class TestConfigureSonos:
+    def test_sets_sonos_available(self):
+        from unittest.mock import MagicMock
+        p = AppleMusicProvider()
+        client = MagicMock()
+        p.configure_sonos(client, "acc-tok", "ref-tok", "hh-123")
+        assert p.sonos_available
+
+    def test_stores_household_id(self):
+        from unittest.mock import MagicMock
+        p = AppleMusicProvider()
+        p.configure_sonos(MagicMock(), "acc", "ref", "hh-456")
+        assert p._sonos_household_id == "hh-456"
+
+    def test_stores_tokens(self):
+        from unittest.mock import MagicMock
+        p = AppleMusicProvider()
+        p.configure_sonos(MagicMock(), "my-access", "my-refresh", "hh-789")
+        assert p._sonos_access_token == "my-access"
+        assert p._sonos_refresh_token == "my-refresh"
+
+    def test_stores_on_token_refresh_callback(self):
+        from unittest.mock import MagicMock
+        p = AppleMusicProvider()
+        cb = MagicMock()
+        p.configure_sonos(MagicMock(), "a", "r", "hh", on_token_refresh=cb)
+        assert p._on_sonos_token_refresh is cb
+
+    def test_not_available_before_configure(self):
+        p = AppleMusicProvider()
+        assert not p.sonos_available

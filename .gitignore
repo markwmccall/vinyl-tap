@@ -10,3 +10,5 @@ coverage.xml
 .pytest_cache/
 update.log
 .update-rollback
+certs/
+dev-server.log

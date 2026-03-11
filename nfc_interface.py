@@ -51,8 +51,9 @@ def parse_tag_data(tag_string):
     """Parse an NDEF tag string into a dict with 'service', 'type', and 'id'.
 
     Supported formats:
-      {service}:{collection_id}       -> {"service": "...", "type": "album", "id": "..."}
-      {service}:track:{track_id}      -> {"service": "...", "type": "track", "id": "..."}
+      {service}:{collection_id}          -> {"service": "...", "type": "album", "id": "..."}
+      {service}:track:{track_id}         -> {"service": "...", "type": "track", "id": "..."}
+      {service}:playlist:{playlist_id}   -> {"service": "...", "type": "playlist", "id": "..."}
 
     Raises ValueError only for structurally invalid strings (no colon, empty parts).
     Unknown services parse successfully; provider lookup raises KeyError later.
@@ -67,6 +68,11 @@ def parse_tag_data(tag_string):
         if not track_id:
             raise ValueError(f"Unrecognised tag format: {tag_string!r}")
         return {"service": service, "type": "track", "id": track_id}
+    if rest.startswith("playlist:"):
+        playlist_id = rest[len("playlist:"):]
+        if not playlist_id:
+            raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+        return {"service": service, "type": "playlist", "id": playlist_id}
     return {"service": service, "type": "album", "id": rest}
 
 

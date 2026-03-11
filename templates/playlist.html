@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %} - {{ info.title }}{% endblock %}
+
+{% block content %}
+<div class="album-page">
+  <div class="album-header">
+    <img src="{{ info.artwork_url }}" alt="{{ info.title }}" class="album-art">
+    <div class="album-meta">
+      <h1>{{ info.title }}</h1>
+      <p class="artist">Personal Playlist</p>
+      <p class="tag-string">Tag: <code>apple:playlist:{{ playlist_id }}</code></p>
+
+      <div class="action-btns">
+        <button id="play-btn" class="play-btn" data-playlist-id="{{ playlist_id }}">
+          ▶ Play Now
+        </button>
+        <button id="write-btn" class="write-btn" data-playlist-id="{{ playlist_id }}">
+          Write to Tag
+        </button>
+      </div>
+      <p id="action-status" class="write-status"></p>
+      <div id="write-confirm" class="write-confirm" style="display:none">
+        <span id="write-confirm-msg"></span>
+        <button id="write-confirm-yes" class="write-confirm-yes">Overwrite</button>
+        <button id="write-confirm-no" class="write-confirm-no">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='player.js') }}"></script>
+<script>
+  document.getElementById('play-btn').addEventListener('click', function() {
+    postAction('/play', {playlist_id: this.dataset.playlistId}, this, 'Playing…', '▶ Play Now',
+      () => { window.refreshNowPlaying && window.refreshNowPlaying(); return '✓ Playing on Sonos'; });
+  });
+
+  document.getElementById('write-btn').addEventListener('click', function() {
+    writeTag({playlist_id: this.dataset.playlistId});
+  });
+
+  document.getElementById('write-confirm-yes').addEventListener('click', function() {
+    document.getElementById('write-confirm').style.display = 'none';
+    writeTag({playlist_id: document.getElementById('write-btn').dataset.playlistId, force: true});
+  });
+</script>
+{% endblock %}

@@ -11,6 +11,7 @@
   <div class="search-tabs">
     <button class="tab-btn active" data-type="album">Albums</button>
     <button class="tab-btn" data-type="song">Songs</button>
+    <button class="tab-btn" data-type="playlist">Playlists</button>
   </div>
 
   <div id="results" class="results-grid"></div>
@@ -37,7 +38,11 @@
       btn.classList.add('active');
       activeType = btn.dataset.type;
       const q = input.value.trim();
-      if (q) fetchResults(q);
+      if (activeType === 'playlist') {
+        fetchResults(q);
+      } else if (q) {
+        fetchResults(q);
+      }
     });
   });
 
@@ -45,7 +50,7 @@
     clearTimeout(timer);
     const q = input.value.trim();
     clearBtn.style.display = q ? 'flex' : 'none';
-    if (!q) { results.innerHTML = ''; return; }
+    if (!q && activeType !== 'playlist') { results.innerHTML = ''; return; }
     timer = setTimeout(() => fetchResults(q), 300);
   });
 
@@ -58,13 +63,26 @@
 
   async function fetchResults(q) {
     results.innerHTML = '<p class="loading">Searching…</p>';
-    const resp = await fetch('/search?q=' + encodeURIComponent(q) + '&type=' + activeType);
+    const url = activeType === 'playlist'
+      ? '/search?type=playlist' + (q ? '&q=' + encodeURIComponent(q) : '')
+      : '/search?q=' + encodeURIComponent(q) + '&type=' + activeType;
+    const resp = await fetch(url);
     const items = await resp.json();
     if (!items.length) {
       results.innerHTML = '<p class="empty">No results.</p>';
       return;
     }
-    if (activeType === 'album') {
+    if (activeType === 'playlist') {
+      results.innerHTML = items.map(p => `
+        <a href="/playlist/${encodeURIComponent(p.playlist_id)}" class="album-card">
+          <img src="${p.artwork_url}" alt="${p.title}">
+          <div class="album-info">
+            <div class="album-name">${p.title}</div>
+            <div class="album-artist">Personal Playlist</div>
+          </div>
+        </a>
+      `).join('');
+    } else if (activeType === 'album') {
       results.innerHTML = items.map(a => `
         <a href="/album/${a.id}" class="album-card">
           <img src="${a.artwork_url}" alt="${a.name}">

@@ -9,6 +9,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 
@@ -20,7 +22,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, ses
 import soco
 from nfc_interface import MockNFC, PN532NFC, parse_tag_data
 from providers import get_provider
-from sonos_controller import get_now_playing, get_speakers, get_volume, next_track, pause, play_album, prev_track, resume, set_volume, stop
+from sonos_controller import get_now_playing, get_speakers, get_volume, next_track, pause, play_album, play_playlist, prev_track, resume, set_volume, stop
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
@@ -60,6 +62,34 @@ _NFC_MAX_CONSECUTIVE_ERRORS = 5
 _NFC_BACKOFF_SECS = 30
 
 
+def _get_household_id_upnp(speaker_ip: str) -> str:
+    """Fetch the Sonos household ID from the local speaker via UPnP SOAP."""
+    soap_body = (
+        '<?xml version="1.0"?>'
+        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">'
+        '<s:Body><u:GetHouseholdID xmlns:u="urn:schemas-upnp-org:service:DeviceProperties:1">'
+        "</u:GetHouseholdID></s:Body></s:Envelope>"
+    )
+    req = urllib.request.Request(
+        f"http://{speaker_ip}:1400/DeviceProperties/Control",
+        data=soap_body.encode(),
+        headers={
+            "Content-Type": 'text/xml; charset="utf-8"',
+            "SOAPACTION": '"urn:schemas-upnp-org:service:DeviceProperties:1#GetHouseholdID"',
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode()
+        import re
+        m = re.search(r"<CurrentHouseholdID>([^<]+)</CurrentHouseholdID>", body)
+        return m.group(1) if m else ""
+    except Exception as e:
+        log.warning("Could not get household ID from speaker: %s", e)
+        return ""
+
+
 def _load_config():
     with open(CONFIG_PATH) as f:
         config = json.load(f)
@@ -74,6 +104,76 @@ def _load_config():
     if missing:
         raise RuntimeError(f"Missing required config fields: {', '.join(missing)}")
     return config
+
+
+def _configure_sonos():
+    """If Sonos Control API tokens are present in config, configure providers."""
+    try:
+        config = _load_config()
+    except Exception:
+        return
+    sonos_cfg = config.get("services", {}).get("sonos", {})
+    access_token = sonos_cfg.get("access_token")
+    refresh_token = sonos_cfg.get("refresh_token")
+    household_id = sonos_cfg.get("household_id")
+    client_key = sonos_cfg.get("client_key")
+    client_secret = sonos_cfg.get("client_secret")
+    if not (access_token and refresh_token and household_id and client_key and client_secret):
+        return
+
+    from providers.sonos_control import SonosControlClient
+    client = SonosControlClient(client_key, client_secret)
+
+    def _on_sonos_token_refresh(new_access_token, new_refresh_token):
+        try:
+            with open(CONFIG_PATH) as f:
+                cfg = json.load(f)
+            cfg.setdefault("services", {}).setdefault("sonos", {})
+            cfg["services"]["sonos"]["access_token"] = new_access_token
+            cfg["services"]["sonos"]["refresh_token"] = new_refresh_token
+            with open(CONFIG_PATH, "w") as f:
+                json.dump(cfg, f, indent=2)
+            log.info("Persisted refreshed Sonos token to config")
+        except Exception as e:
+            log.warning("Failed to persist Sonos token: %s", e)
+
+    provider = get_provider("apple")
+    provider.configure_sonos(
+        client, access_token, refresh_token, household_id,
+        on_token_refresh=_on_sonos_token_refresh,
+    )
+
+
+def _configure_smapi():
+    """If SMAPI tokens are present in config, configure the Apple Music provider."""
+    try:
+        config = _load_config()
+    except Exception:
+        return
+    apple_cfg = config.get("services", {}).get("apple", {})
+    token = apple_cfg.get("smapi_token")
+    key = apple_cfg.get("smapi_key")
+    hhid = apple_cfg.get("smapi_household_id")
+    if not (token and key and hhid):
+        return
+
+    def _on_token_refresh(new_token, new_key):
+        """Persist refreshed SMAPI tokens to config.json."""
+        try:
+            with open(CONFIG_PATH) as f:
+                cfg = json.load(f)
+            cfg.setdefault("services", {}).setdefault("apple", {})
+            cfg["services"]["apple"]["smapi_token"] = new_token
+            cfg["services"]["apple"]["smapi_key"] = new_key
+            with open(CONFIG_PATH, "w") as f:
+                json.dump(cfg, f, indent=2)
+            log.info("Persisted refreshed SMAPI token to config")
+        except Exception as e:
+            log.warning("Failed to persist SMAPI token: %s", e)
+
+    provider = get_provider("apple")
+    provider.configure_smapi(token, key, hhid, on_token_refresh=_on_token_refresh)
+    log.info("Apple Music SMAPI search enabled (household=%s)", hhid)
 
 
 def _fmt_bytes(n):
@@ -230,7 +330,7 @@ def _save_tags(tags):
         json.dump(tags, f, indent=2)
 
 
-def _record_tag(tag_string, tag_type, name, artist, artwork_url, album_id=None, track_id=None):
+def _record_tag(tag_string, tag_type, name, artist, artwork_url, album_id=None, track_id=None, playlist_id=None):
     tags = _load_tags()
     tags = [t for t in tags if t["tag_string"] != tag_string]
     tags.insert(0, {
@@ -241,6 +341,7 @@ def _record_tag(tag_string, tag_type, name, artist, artwork_url, album_id=None, 
         "artwork_url": artwork_url,
         "album_id": album_id,
         "track_id": track_id,
+        "playlist_id": playlist_id,
         "written_at": datetime.utcnow().isoformat(),
     })
     _save_tags(tags)
@@ -345,11 +446,17 @@ def _nfc_loop(config_path):
         try:
             tag = parse_tag_data(tag_data)
             provider = get_provider(tag["service"])
-            tracks = (provider.get_track(tag["id"]) if tag["type"] == "track"
-                      else provider.get_album_tracks(tag["id"]))
             config = _load_config()
-            play_album(config["speaker_ip"], tracks, provider, config["sn"],
-                       speaker_name=config.get("speaker_name"), config_path=config_path)
+            if tag["type"] == "playlist":
+                info = provider.get_playlist_info(tag["id"]) or {}
+                play_playlist(config["speaker_ip"], tag["id"], info.get("title", ""),
+                              provider, config["sn"],
+                              speaker_name=config.get("speaker_name"), config_path=config_path)
+            else:
+                tracks = (provider.get_track(tag["id"]) if tag["type"] == "track"
+                          else provider.get_album_tracks(tag["id"]))
+                play_album(config["speaker_ip"], tracks, provider, config["sn"],
+                           speaker_name=config.get("speaker_name"), config_path=config_path)
             log.info(f"Playing {tag['type']} {tag['id']}")
         except Exception as e:
             log.error(f"NFC play error: {e}")
@@ -389,6 +496,10 @@ def _format_existing_tag(tag_string):
             tracks = provider.get_track(tag["id"])
             if tracks:
                 return f"{tracks[0]['name']} by {tracks[0]['artist']}"
+        elif tag["type"] == "playlist":
+            info = provider.get_playlist_info(tag["id"])
+            if info:
+                return f"{info['title']} (playlist)"
         else:
             tracks = provider.get_album_tracks(tag["id"])
             if tracks:
@@ -400,7 +511,11 @@ def _format_existing_tag(tag_string):
 
 def _do_record_tag(tag_data, data):
     provider = get_provider("apple")
-    if "track_id" in data:
+    if "playlist_id" in data:
+        info = provider.get_playlist_info(data["playlist_id"]) or {}
+        _record_tag(tag_data, "playlist", info.get("title", ""), "",
+                    info.get("artwork_url", ""), playlist_id=data["playlist_id"])
+    elif "track_id" in data:
         tracks = provider.get_track(data["track_id"])
         if tracks:
             t = tracks[0]
@@ -424,12 +539,25 @@ def index():
 def search():
     q = request.args.get("q", "").strip()
     search_type = request.args.get("type", "album")
+    provider = get_provider("apple")
+    if search_type == "playlist":
+        if not q:
+            # Return personal playlists when no query
+            playlists = provider.list_playlists() if hasattr(provider, "list_playlists") else []
+            return jsonify(playlists)
+        return jsonify(provider.search_playlists(q))
     if not q:
         return jsonify([])
-    provider = get_provider("apple")
     if search_type == "song":
         return jsonify(provider.search_songs(q))
     return jsonify(provider.search_albums(q))
+
+
+@app.route("/playlists")
+def playlists():
+    provider = get_provider("apple")
+    items = provider.list_playlists() if hasattr(provider, "list_playlists") else []
+    return jsonify(items)
 
 
 @app.route("/album/<int:album_id>")
@@ -438,6 +566,15 @@ def album(album_id):
     if not tracks:
         abort(404)
     return render_template("album.html", album_id=album_id, tracks=tracks, show_now_playing=True)
+
+
+@app.route("/playlist/<playlist_id>")
+def playlist_page(playlist_id):
+    provider = get_provider("apple")
+    info = provider.get_playlist_info(playlist_id)
+    if not info:
+        abort(404)
+    return render_template("playlist.html", playlist_id=playlist_id, info=info, show_now_playing=True)
 
 
 @app.route("/track/<int:track_id>")
@@ -483,10 +620,11 @@ def not_found(e):
 @app.route("/write-tag", methods=["POST"])
 def write_tag():
     data = request.get_json()
-    if not data or ("track_id" not in data and "album_id" not in data):
-        return jsonify({"error": "album_id or track_id required"}), 400
+    if not data or ("track_id" not in data and "album_id" not in data and "playlist_id" not in data):
+        return jsonify({"error": "album_id, track_id, or playlist_id required"}), 400
     config = _load_config()
     tag_data = (f"apple:track:{data['track_id']}" if "track_id" in data
+                else f"apple:playlist:{data['playlist_id']}" if "playlist_id" in data
                 else f"apple:{data['album_id']}")
     force = data.get("force", False)
 
@@ -566,18 +704,24 @@ def write_url_tag():
 @app.route("/play", methods=["POST"])
 def play():
     data = request.get_json()
-    if not data or ("track_id" not in data and "album_id" not in data):
-        return jsonify({"error": "album_id or track_id required"}), 400
+    if not data or ("track_id" not in data and "album_id" not in data and "playlist_id" not in data):
+        return jsonify({"error": "album_id, track_id, or playlist_id required"}), 400
     config = _load_config()
     provider = get_provider("apple")
-    if "track_id" in data:
-        tracks = provider.get_track(data["track_id"])
+    if "playlist_id" in data:
+        info = provider.get_playlist_info(data["playlist_id"]) or {}
+        play_playlist(config["speaker_ip"], data["playlist_id"], info.get("title", ""),
+                      provider, config["sn"],
+                      speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     else:
-        tracks = provider.get_album_tracks(data["album_id"])
-    if not tracks:
-        return jsonify({"error": "not found"}), 404
-    play_album(config["speaker_ip"], tracks, provider, config["sn"],
-               speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+        if "track_id" in data:
+            tracks = provider.get_track(data["track_id"])
+        else:
+            tracks = provider.get_album_tracks(data["album_id"])
+        if not tracks:
+            return jsonify({"error": "not found"}), 404
+        play_album(config["speaker_ip"], tracks, provider, config["sn"],
+                   speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     return jsonify({"status": "ok"})
 
 
@@ -605,6 +749,150 @@ def settings_sonos():
         session["csrf_token"] = secrets.token_hex(32)
     return render_template("settings_sonos.html", config=config, saved=saved,
                            csrf_token=session["csrf_token"])
+
+
+@app.route("/settings/music")
+def settings_music():
+    config = _load_config()
+    sonos_cfg = config.get("services", {}).get("sonos", {})
+    connected = bool(sonos_cfg.get("access_token") and sonos_cfg.get("household_id"))
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return render_template(
+        "settings_music.html",
+        config=config,
+        sonos_connected=connected,
+        sonos_household_id=sonos_cfg.get("household_id", ""),
+        csrf_token=session["csrf_token"],
+    )
+
+
+@app.route("/settings/music/credentials", methods=["POST"])
+def settings_music_credentials():
+    token = request.form.get("csrf_token", "")
+    if not token or token != session.get("csrf_token"):
+        abort(403)
+    with open(CONFIG_PATH) as f:
+        cfg = json.load(f)
+    cfg.setdefault("services", {}).setdefault("sonos", {})
+    cfg["services"]["sonos"]["client_key"] = request.form.get("client_key", "").strip()
+    cfg["services"]["sonos"]["client_id"] = request.form.get("client_id", "").strip()
+    cfg["services"]["sonos"]["client_secret"] = request.form.get("client_secret", "").strip()
+    cfg["services"]["sonos"]["redirect_uri"] = request.form.get("redirect_uri", "").strip()
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(cfg, f, indent=2)
+    return redirect(url_for("settings_music") + "?saved=1")
+
+
+@app.route("/sonos/auth")
+def sonos_auth():
+    config = _load_config()
+    sonos_cfg = config.get("services", {}).get("sonos", {})
+    client_key = sonos_cfg.get("client_key")
+    client_secret = sonos_cfg.get("client_secret")
+    redirect_uri = sonos_cfg.get("redirect_uri")
+    if not (client_key and client_secret and redirect_uri):
+        return jsonify({"error": "Sonos client credentials not configured"}), 400
+
+    from providers.sonos_control import SonosControlClient
+    client = SonosControlClient(client_key, client_secret)
+    state = secrets.token_hex(16)
+    session["sonos_oauth_state"] = state
+    if request.args.get("show_code"):
+        session["sonos_show_code"] = True
+    auth_url = client.get_auth_url(redirect_uri, state)
+    return redirect(auth_url)
+
+
+@app.route("/sonos/callback")
+def sonos_callback():
+    error = request.args.get("error")
+    if error:
+        log.warning("Sonos OAuth error: %s", error)
+        return redirect(url_for("settings_music") + "?error=" + error)
+
+    code = request.args.get("code")
+    state = request.args.get("state")
+    if not code or state != session.get("sonos_oauth_state"):
+        return redirect(url_for("settings_music") + "?error=state_mismatch")
+
+    # Debug mode: show the auth code so it can be tested manually
+    if session.pop("sonos_show_code", False):
+        from flask import render_template_string
+        return render_template_string(
+            "<h2>Authorization Code</h2><p>Copy this code to use in the Sonos token test page:</p>"
+            "<pre style='font-size:1.2em;padding:12px;background:#f4f4f4'>{{ code }}</pre>"
+            "<p><a href='/settings/music'>Back to Settings</a></p>",
+            code=code,
+        )
+
+    try:
+        config = _load_config()
+        sonos_cfg = config.get("services", {}).get("sonos", {})
+        client_key = sonos_cfg.get("client_key")
+        client_secret = sonos_cfg.get("client_secret")
+        redirect_uri = sonos_cfg.get("redirect_uri")
+
+        from providers.sonos_control import SonosControlClient
+        client = SonosControlClient(client_key, client_secret)
+        access_token, refresh_token, _ = client.exchange_code(code, redirect_uri)
+
+        # Get household ID from the local speaker via UPnP (Control API /households
+        # requires commercial approval; local UPnP is always available).
+        speaker_ip = config.get("speaker_ip", "")
+        household_id = _get_household_id_upnp(speaker_ip) if speaker_ip else ""
+        if not household_id:
+            return redirect(url_for("settings_music") + "?error=no_households")
+
+        with open(CONFIG_PATH) as f:
+            cfg = json.load(f)
+        cfg.setdefault("services", {}).setdefault("sonos", {})
+        cfg["services"]["sonos"]["access_token"] = access_token
+        cfg["services"]["sonos"]["refresh_token"] = refresh_token
+        cfg["services"]["sonos"]["household_id"] = household_id
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(cfg, f, indent=2)
+
+        _configure_sonos()
+        log.info("Sonos account connected (household=%s)", household_id)
+    except Exception as e:
+        log.error("Sonos OAuth callback failed: %s", e)
+        return redirect(url_for("settings_music") + "?error=callback_failed")
+
+    return redirect(url_for("settings_music") + "?connected=1")
+
+
+@app.route("/sonos/status")
+def sonos_status():
+    config = _load_config()
+    sonos_cfg = config.get("services", {}).get("sonos", {})
+    connected = bool(sonos_cfg.get("access_token") and sonos_cfg.get("household_id"))
+    return jsonify({
+        "connected": connected,
+        "household_id": sonos_cfg.get("household_id", "") if connected else "",
+    })
+
+
+@app.route("/sonos/disconnect", methods=["POST"])
+def sonos_disconnect():
+    token = request.form.get("csrf_token", "")
+    if not token or token != session.get("csrf_token"):
+        abort(403)
+    try:
+        with open(CONFIG_PATH) as f:
+            cfg = json.load(f)
+        cfg.get("services", {}).get("sonos", {}).clear()
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(cfg, f, indent=2)
+        provider = get_provider("apple")
+        provider._sonos_client = None
+        provider._sonos_access_token = None
+        provider._sonos_refresh_token = None
+        provider._sonos_household_id = None
+        provider._on_sonos_token_refresh = None
+    except Exception as e:
+        log.warning("Failed to disconnect Sonos: %s", e)
+    return redirect(url_for("settings_music") + "?disconnected=1")
 
 
 @app.route("/settings/nfc", methods=["GET", "POST"])
@@ -859,14 +1147,21 @@ def read_tag():
     except KeyError:
         return jsonify({"tag_string": tag_string, "tag_type": tag_type, "content_id": content_id,
                         "album": None, "error": f"Unknown service: {tag['service']!r}"})
-    if tag_type == "track":
+    album = None
+    if tag_type == "playlist":
+        info = provider.get_playlist_info(content_id)
+        if info:
+            album = {"name": info["title"], "artist": "", "artwork_url": info.get("artwork_url", "")}
+    elif tag_type == "track":
         tracks = provider.get_track(content_id)
+        if tracks:
+            t = tracks[0]
+            album = {"name": t["album"], "artist": t["artist"], "artwork_url": t["artwork_url"]}
     else:
         tracks = provider.get_album_tracks(content_id)
-    album = None
-    if tracks:
-        t = tracks[0]
-        album = {"name": t["album"], "artist": t["artist"], "artwork_url": t["artwork_url"]}
+        if tracks:
+            t = tracks[0]
+            album = {"name": t["album"], "artist": t["artist"], "artwork_url": t["artwork_url"]}
     return jsonify({"tag_string": tag_string, "tag_type": tag_type, "content_id": content_id,
                     "album": album, "error": None})
 
@@ -960,14 +1255,20 @@ def play_tag():
         provider = get_provider(tag["service"])
     except KeyError as e:
         return jsonify({"error": str(e)}), 400
-    if tag["type"] == "track":
-        tracks = provider.get_track(tag["id"])
+    if tag["type"] == "playlist":
+        info = provider.get_playlist_info(tag["id"]) or {}
+        play_playlist(config["speaker_ip"], tag["id"], info.get("title", ""),
+                      provider, config["sn"],
+                      speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     else:
-        tracks = provider.get_album_tracks(tag["id"])
-    if not tracks:
-        return jsonify({"error": "not found"}), 404
-    play_album(config["speaker_ip"], tracks, provider, config["sn"],
-               speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+        if tag["type"] == "track":
+            tracks = provider.get_track(tag["id"])
+        else:
+            tracks = provider.get_album_tracks(tag["id"])
+        if not tracks:
+            return jsonify({"error": "not found"}), 404
+        play_album(config["speaker_ip"], tracks, provider, config["sn"],
+                   speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
     return jsonify({"status": "ok"})
 
 
@@ -1051,14 +1352,24 @@ def _sigterm_handler(signum, frame):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger("providers.sonos_control").setLevel(logging.DEBUG)
     signal.signal(signal.SIGTERM, _sigterm_handler)
     parser = argparse.ArgumentParser(description="Vinyl emulator web UI")
     parser.add_argument("--host", default="127.0.0.1",
                         help="Host to bind to (use 0.0.0.0 for Pi)")
     parser.add_argument("--port", type=int, default=5000,
                         help="Port to listen on (use 80 with authbind on Pi)")
+    parser.add_argument("--ssl-cert", metavar="CERT",
+                        help="SSL certificate file (enables HTTPS)")
+    parser.add_argument("--ssl-key", metavar="KEY",
+                        help="SSL private key file (enables HTTPS)")
     args = parser.parse_args()
+    ssl_context = None
+    if args.ssl_cert and args.ssl_key:
+        ssl_context = (args.ssl_cert, args.ssl_key)
+    _configure_sonos()
+    _configure_smapi()
     _start_nfc_thread(CONFIG_PATH)
     threading.Thread(target=_auto_update_loop, daemon=True).start()
     # Suppress werkzeug "development server" warning — this is a single-user
@@ -1070,4 +1381,4 @@ if __name__ == "__main__":  # pragma: no cover
             )
         })()
     )
-    app.run(host=args.host, port=args.port)
+    app.run(host=args.host, port=args.port, ssl_context=ssl_context)

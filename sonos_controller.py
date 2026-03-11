@@ -146,6 +146,30 @@ def _do_play_album(speaker, track_dicts, provider, sn):
     coordinator.play_from_queue(0)
 
 
+def _do_play_playlist(speaker, playlist_id, title, provider, sn):
+    coordinator = speaker.group.coordinator
+    udn = provider.lookup_udn(coordinator, sn)
+    uri = provider.build_playlist_uri(playlist_id, sn)
+    metadata = provider.build_playlist_didl(playlist_id, title, udn)
+    coordinator.avTransport.SetAVTransportURI([
+        ("InstanceID", 0),
+        ("CurrentURI", uri),
+        ("CurrentURIMetaData", metadata),
+    ])
+    coordinator.avTransport.Play([("InstanceID", 0), ("Speed", 1)])
+
+
+def play_playlist(speaker_ip, playlist_id, title, provider, sn, speaker_name=None, config_path=None):
+    try:
+        _do_play_playlist(soco.SoCo(speaker_ip), playlist_id, title, provider, sn)
+    except Exception:
+        if speaker_name and config_path:
+            new_ip = _rediscover_speaker(speaker_name, config_path)
+            _do_play_playlist(soco.SoCo(new_ip), playlist_id, title, provider, sn)
+        else:
+            raise
+
+
 def play_album(speaker_ip, track_dicts, provider, sn, speaker_name=None, config_path=None):
     if not track_dicts:
         return

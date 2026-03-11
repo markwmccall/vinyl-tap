@@ -226,13 +226,3 @@ class TestPN532NFC:
         result = nfc.read_tag()
         assert result is None
         assert mock_pn532.ntag2xx_read_block.call_count == 1  # stopped at first None
-
-    def test_reset_calls_hardware_reset_and_sam(self):
-        """reset() triggers hardware reset via RSTPDN pin and re-runs SAM configuration."""
-        mock_pn532 = MagicMock()
-        nfc = self._make_nfc(mock_pn532)
-        nfc.reset()
-        mock_pn532.reset.assert_called_once()
-        # SAM_configuration called twice: once in __init__ (mocked away) and once in reset.
-        # Since __init__ is fully patched out, we see exactly one SAM call from reset().
-        mock_pn532.SAM_configuration.assert_called_once()

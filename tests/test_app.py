@@ -1589,57 +1589,6 @@ class TestNfcLoop:
         with pytest.raises(KeyboardInterrupt):
             app._nfc_loop(pn532_config)
 
-    def test_reset_attempted_at_error_threshold(self, pn532_config, monkeypatch):
-        """At _NFC_MAX_CONSECUTIVE_ERRORS, _nfc.reset() is called once."""
-        import app
-        threshold = app._NFC_MAX_CONSECUTIVE_ERRORS
-        mock_nfc = MagicMock()
-        # Errors hit threshold; reset succeeds; then loop stops.
-        mock_nfc.read_tag.side_effect = (
-            [Exception("OSError")] * threshold + [KeyboardInterrupt]
-        )
-        monkeypatch.setattr(app, "_nfc", mock_nfc)
-        with patch("app.time.sleep"), pytest.raises(KeyboardInterrupt):
-            app._nfc_loop(pn532_config)
-        mock_nfc.reset.assert_called_once()
-
-    def test_successful_reset_clears_errors_and_retries(self, pn532_config, monkeypatch):
-        """After a successful reset(), consecutive_errors is cleared and no backoff sleep."""
-        import app
-        threshold = app._NFC_MAX_CONSECUTIVE_ERRORS
-        mock_nfc = MagicMock()
-        # Errors → threshold → reset succeeds → one more read then stop.
-        mock_nfc.read_tag.side_effect = (
-            [Exception("OSError")] * threshold
-            + ["apple:1440903625", KeyboardInterrupt]
-        )
-        monkeypatch.setattr(app, "_nfc", mock_nfc)
-        with patch("app.time.sleep") as mock_sleep, \
-             patch.object(providers.get_provider("apple"), "get_album_tracks", return_value=SAMPLE_TRACKS), \
-             patch("app.play_album"), \
-             pytest.raises(KeyboardInterrupt):
-            app._nfc_loop(pn532_config)
-        # No backoff sleep — reset succeeded so we retried immediately.
-        mock_sleep.assert_not_called()
-
-    def test_power_cycle_warning_and_backoff_when_reset_fails(self, pn532_config, monkeypatch):
-        """When reset() raises, logs 'power cycle' warning and backs off with sleep."""
-        import app
-        threshold = app._NFC_MAX_CONSECUTIVE_ERRORS
-        mock_nfc = MagicMock()
-        mock_nfc.read_tag.side_effect = (
-            [Exception("OSError")] * (threshold + 1) + [KeyboardInterrupt]
-        )
-        mock_nfc.reset.side_effect = Exception("GPIO error")
-        monkeypatch.setattr(app, "_nfc", mock_nfc)
-        with patch("app.time.sleep") as mock_sleep, pytest.raises(KeyboardInterrupt):
-            with patch.object(app.log, "error") as mock_err:
-                app._nfc_loop(pn532_config)
-        power_cycle_calls = [c for c in mock_err.call_args_list
-                             if "power cycle" in str(c)]
-        assert len(power_cycle_calls) == 1
-        mock_sleep.assert_called_with(app._NFC_BACKOFF_SECS)
-
     def test_recovery_logged_after_errors_below_threshold(self, pn532_config, monkeypatch):
         """After errors (below threshold) then a successful read, logs recovery."""
         import app

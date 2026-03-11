@@ -49,12 +49,10 @@ Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/). Select **
 
 ### 2. Assemble the hardware
 
-Attach the PN532 NFC HAT to the Pi's 40-pin GPIO header. Before powering on, configure the HAT jumpers as described in the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT):
+Attach the PN532 NFC HAT to the Pi's 40-pin GPIO header. Before powering on, configure the HAT DIP switches for SPI mode as described in the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT):
 
-1. **Set I2C mode** — set I0 to H and I1 to L using the mode jumper caps.
-2. **Connect RSTPDN to D20** — optional but recommended; enables software reset of the PN532 after repeated I2C failures without requiring a power cycle.
-
-> **Do not connect INT0 to D16.** The Waveshare docs suggest this to avoid clock stretching, but when the IRQ pin is set in software, the Adafruit library will only detect cards when GPIO16 goes LOW. If INT0 is not physically wired to D16 the pin floats HIGH and no taps are ever detected. Leave INT0 unconnected; the BCM2835 I2C timeout (configured by setup.sh) handles bus hang prevention instead.
+1. **Set SPI mode** — set I0 to L and I1 to H using the mode DIP switches.
+2. **Leave INT0 and RSTPDN unconnected** — neither is needed in SPI mode.
 
 Insert the SD card and power on. Wait about 60 seconds, then SSH in:
 
@@ -65,10 +63,10 @@ ssh your-username@your-hostname.local
 ### 3. Verify the HAT is detected
 
 ```bash
-sudo i2cdetect -y 1
+ls /dev/spidev*
 ```
 
-You should see `24` appear at address `0x24`. If nothing appears, check that the HAT is firmly seated and the interface switches are set to I2C.
+You should see `/dev/spidev0.0`. If nothing appears, check that the HAT is firmly seated and the DIP switches are set to SPI mode.
 
 ### 4. Install
 
@@ -76,7 +74,7 @@ You should see `24` appear at address `0x24`. If nothing appears, check that the
 curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-emulator/main/install.sh | bash
 ```
 
-This downloads the latest release and runs setup — installs dependencies, enables I2C, creates the config, and installs the `vinyl-web` systemd service. It will prompt you to reboot at the end.
+This downloads the latest release and runs setup — installs dependencies, enables SPI, creates the config, and installs the `vinyl-web` systemd service. It will prompt you to reboot at the end.
 
 > **Note for Pi Zero 2 W users:** The first run compiles `lxml` from source, which can take 10–20 minutes. This is a one-time cost.
 
@@ -100,20 +98,10 @@ Open `http://your-hostname.local` in your browser, go to **Settings → Update**
 - Try the IP address directly if mDNS isn't resolving
 
 **HAT not detected**
-- Confirm the mode jumpers on the HAT are set to I2C (I0=H, I1=L) — see the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT)
+- Confirm the DIP switches on the HAT are set to SPI mode (I0=L, I1=H) — see the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT)
 - Check the HAT is firmly seated — all 40 pins engaged
-- Verify with `sudo i2cdetect -y 1` — PN532 should appear at address `0x24`
-- If `i2cdetect` hangs for over a minute and shows nothing at `0x24`, the I2C bus is locked up — power cycle the Pi (unplug and replug power; a reboot alone is not enough)
-
-**NFC reader stops working / requires power cycle to recover**
-- This is almost always an I2C bus hang caused by the PN532 clock-stretching the SCL line
-- The BCM2835 I2C timeout (written by setup.sh to `/etc/modprobe.d/i2c-bcm2835.conf`) prevents indefinite hangs — apply it and reboot if you haven't already
-- Connect RSTPDN to D20 so the software can attempt a hardware reset automatically after repeated failures
-- If the bus is currently hung: power cycle the Pi (unplug power; reboot alone is not enough)
-
-**Taps not detected at all after a software update**
-- If INT0 is connected to D16 (GPIO16) on the HAT, disconnect it — leave INT0 unconnected
-- When the IRQ pin is set in software, the library only reads the PN532 when GPIO16 goes LOW; if INT0 is not physically wired to D16 the pin floats HIGH and no cards are ever detected
+- Verify with `ls /dev/spidev*` — you should see `/dev/spidev0.0`
+- If `/dev/spidev0.0` is missing, SPI may not be enabled — re-run `setup.sh` or run `sudo raspi-config` and enable SPI under Interface Options
 
 **Music doesn't play after tapping a card**
 - Check `sudo systemctl status vinyl-web` for errors

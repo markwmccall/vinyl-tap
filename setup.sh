@@ -3,7 +3,7 @@
 # Run once after cloning the repo on the Pi:
 #   chmod +x setup.sh && ./setup.sh
 #
-# After the script finishes it will prompt you to reboot (required for I2C).
+# After the script finishes it will prompt you to reboot (required for SPI).
 # After rebooting, open http://vinyl-pi.local:5000 in your browser,
 # go to Settings, and fill in your speaker IP and sn value.
 
@@ -23,18 +23,18 @@ echo "[1/5] Installing system packages..."
 sudo apt-get update -qq
 sudo apt-get install -y python3-pip python3-dev python3-venv git libxml2-dev libxslt-dev python3-lxml authbind
 
-# --- Enable I2C and add user to i2c group ---
-echo "[2/5] Enabling I2C interface..."
-sudo raspi-config nonint do_i2c 0
-sudo usermod -a -G i2c "$USERNAME"
-echo "      I2C enabled and $USERNAME added to i2c group (takes effect after reboot)"
+# --- Enable SPI and add user to spi group ---
+echo "[2/5] Enabling SPI interface..."
+sudo raspi-config nonint do_spi 0
+sudo usermod -a -G spi "$USERNAME"
+echo "      SPI enabled and $USERNAME added to spi group (takes effect after reboot)"
 
-# Set BCM2835 I2C hardware timeout so a clock-stretched PN532 returns an error
-# instead of hanging the bus indefinitely. Without this, a bad PN532 state
-# (e.g. from a mid-transfer process kill) locks the I2C bus until power cycle.
-if ! grep -qs "i2c_bcm2835" /etc/modprobe.d/i2c-bcm2835.conf 2>/dev/null; then
-    echo "options i2c_bcm2835 clk_tout_ms=200" | sudo tee /etc/modprobe.d/i2c-bcm2835.conf > /dev/null
-    echo "      BCM2835 I2C timeout set to 200ms (prevents NFC bus hang)"
+# On Raspberry Pi OS Bookworm the kernel SPI driver claims CE0 (GPIO8) by default,
+# which prevents the Adafruit Blinka library from also claiming it as a GPIO.
+# Disabling the default SPI overlay and letting Blinka manage CE0 directly fixes this.
+if ! grep -qs "dtoverlay=spi0-1cs,cs0_pin=8" /boot/firmware/config.txt 2>/dev/null; then
+    echo "dtoverlay=spi0-1cs,cs0_pin=8" | sudo tee -a /boot/firmware/config.txt > /dev/null
+    echo "      SPI CE0 overlay configured for Blinka compatibility"
 fi
 
 # --- authbind: allow the service user to bind port 80 ---
@@ -50,7 +50,7 @@ sudo systemctl stop vinyl-web 2>/dev/null || true
 echo "[3/5] Creating venv and installing Python dependencies..."
 python3 -m venv --system-site-packages "$REPO_DIR/.venv"
 "$REPO_DIR/.venv/bin/pip" install -r "$REPO_DIR/requirements.txt"
-"$REPO_DIR/.venv/bin/pip" install adafruit-circuitpython-pn532 RPi.GPIO
+"$REPO_DIR/.venv/bin/pip" install adafruit-circuitpython-pn532 RPi.GPIO spidev
 
 # --- Config file ---
 echo "[4/5] Setting up config..."

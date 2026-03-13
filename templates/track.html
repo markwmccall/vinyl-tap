@@ -7,7 +7,7 @@
     <img src="{{ track.artwork_url }}" alt="{{ track.album }}" class="album-art">
     <div class="album-meta">
       <h1>{{ track.name }}</h1>
-      <p class="artist">{{ track.artist }}</p>
+      <p class="artist"><a href="/?q={{ track.artist | urlencode }}&type=album">{{ track.artist }}</a></p>
       <p class="track-subtitle">
         {% if track.album_id %}
           <a href="/album/{{ track.album_id }}">{{ track.album }}</a>

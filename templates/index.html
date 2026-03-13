@@ -54,11 +54,21 @@
     timer = setTimeout(() => fetchResults(q), 300);
   });
 
-  // Pre-fill from ?q= URL param (e.g. from Now Playing search link)
-  const urlQ = new URLSearchParams(window.location.search).get('q');
+  // Pre-fill from ?q= and ?type= URL params (e.g. from artist links)
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlQ = urlParams.get('q');
+  const urlType = urlParams.get('type');
+  if (urlType) {
+    const targetBtn = [...tabBtns].find(b => b.dataset.type === urlType);
+    if (targetBtn) {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      targetBtn.classList.add('active');
+      activeType = urlType;
+    }
+  }
   if (urlQ && !input.value.trim()) { input.value = urlQ; }
 
-  // Re-run search if the browser restored a value or ?q= param was set
+  // Re-run search if the browser restored a value or ?q= / ?type= param was set
   if (input.value.trim()) { clearBtn.style.display = 'flex'; fetchResults(input.value.trim()); }
 
   async function fetchResults(q) {

@@ -7,7 +7,7 @@
     <img src="{{ tracks[0].artwork_url }}" alt="{{ tracks[0].album }}" class="album-art">
     <div class="album-meta">
       <h1>{{ tracks[0].album }}</h1>
-      <p class="artist">{{ tracks[0].artist }}</p>
+      <p class="artist"><a href="/?q={{ tracks[0].artist | urlencode }}&type=album">{{ tracks[0].artist }}</a></p>
       <p class="tag-string">Tag: <code>apple:{{ album_id }}</code></p>
 
       <div class="action-btns">

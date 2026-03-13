@@ -227,6 +227,8 @@ main {
 .album-meta { flex: 1; }
 .album-meta h1 { font-size: 1.8rem; margin-bottom: 0.4rem; }
 .album-meta .artist { color: var(--text-2); font-size: 1.1rem; margin-bottom: 1.25rem; }
+.album-meta .artist a { color: inherit; text-decoration: underline; text-decoration-color: var(--border); }
+.album-meta .artist a:hover { text-decoration-color: var(--text-2); }
 .track-subtitle { font-size: 0.95rem; color: var(--text-3); margin-top: -0.75rem; margin-bottom: 1.25rem; }
 .track-subtitle a { color: inherit; text-decoration: none; }
 .track-subtitle a:hover { text-decoration: underline; }

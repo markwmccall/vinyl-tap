@@ -180,10 +180,15 @@ class AppleMusicProvider(MusicProvider):
             if item.get("item_type") != "track":
                 continue
             track_id = item.get("id", "")
-            if track_id.startswith("track:"):
-                track_id = track_id[6:]
+            for prefix in ("track:", "song:"):
+                if track_id.startswith(prefix):
+                    track_id = track_id[len(prefix):]
+                    break
+            # Skip non-numeric IDs — they cannot be looked up via the iTunes API
+            if not track_id.isdigit():
+                continue
             results.append({
-                "id": int(track_id) if track_id.isdigit() else track_id,
+                "id": int(track_id),
                 "name": item.get("title", ""),
                 "artist": item.get("artist", ""),
                 "album": item.get("album", ""),

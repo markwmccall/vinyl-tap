@@ -253,6 +253,29 @@ class TestSmapiSearchSongs:
         assert len(results) == 1
         assert results[0]["name"] == "Song"
 
+    def test_strips_song_prefix(self):
+        p = _make_smapi_provider()
+        p._smapi.search = MagicMock(return_value=([
+            {"id": "song:12345", "title": "Song", "artist": "A",
+             "album": "B", "item_type": "track", "album_art_uri": ""},
+        ], 1))
+        results = p.search_songs("test")
+        assert len(results) == 1
+        assert results[0]["id"] == 12345
+
+    def test_skips_non_numeric_ids(self):
+        p = _make_smapi_provider()
+        p._smapi.search = MagicMock(return_value=([
+            {"id": "track:p.LibraryOnlyXYZ", "title": "Library Track", "artist": "A",
+             "album": "B", "item_type": "track", "album_art_uri": ""},
+            {"id": "track:99999", "title": "Catalog Track", "artist": "A",
+             "album": "B", "item_type": "track", "album_art_uri": ""},
+        ], 2))
+        results = p.search_songs("test")
+        assert len(results) == 1
+        assert results[0]["id"] == 99999
+        assert results[0]["name"] == "Catalog Track"
+
 
 class TestSmapiAutoRefresh:
     def test_refreshes_token_on_auth_expired(self):

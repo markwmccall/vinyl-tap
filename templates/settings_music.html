@@ -16,58 +16,50 @@
   <div class="banner error">Connection failed: {{ request.args.get('error') }}</div>
   {% endif %}
 
-  <div class="field">
-    <label>Sonos Account</label>
+  <div class="settings-section">
+    <div class="settings-section-title">Sonos Account</div>
     {% if sonos_connected %}
-    <div class="hint" style="margin-bottom:8px">
-      Connected &mdash; household <code>{{ sonos_household_id[:16] }}…</code>
-    </div>
-    <form method="POST" action="/sonos/disconnect">
+    <p class="hint">Connected &mdash; household <code>{{ sonos_household_id[:16] }}…</code></p>
+    <form method="POST" action="/sonos/disconnect" style="margin-top: 0.75rem;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button type="submit" class="btn-secondary">Disconnect</button>
     </form>
     {% else %}
-    <div class="hint" style="margin-bottom:8px">
-      Connect your Sonos account to enable searching across all linked music
-      services (Apple Music, Amazon Music, Spotify, etc.).
-    </div>
-    <a href="{{ url_for('sonos_auth') }}" class="btn-primary">Connect Sonos Account</a>
+    <p class="hint">Connect your Sonos account to enable searching across all linked music services (Apple Music, Amazon Music, Spotify, etc.).</p>
+    <a href="{{ url_for('sonos_auth') }}" class="btn-primary" style="margin-top: 0.75rem; display: inline-block;">Connect Sonos Account</a>
     {% endif %}
   </div>
 
-  <div class="field">
-    <label>Sonos Client Credentials</label>
-    <div class="hint">
-      These credentials identify this app to the Sonos API. They are stored in
-      <code>config.json</code> and never sent to GitHub.
-    </div>
-    <form method="POST" action="/settings/music/credentials">
+  <div class="settings-section">
+    <div class="settings-section-title">Sonos Client Credentials</div>
+    <p class="hint">These credentials identify this app to the Sonos API. They are stored in <code>config.json</code> and never sent to GitHub.</p>
+    <form method="POST" action="/settings/music/credentials" style="margin-top: 0.75rem;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div style="margin-top:12px">
-        <label for="client_key" style="font-size:0.85em">Client Key (per-environment, for authorize URL)</label>
+      <div class="field">
+        <label for="client_key">Client Key (per-environment, for authorize URL)</label>
         <input type="text" id="client_key" name="client_key"
                value="{{ config.get('services', {}).get('sonos', {}).get('client_key', '') }}"
                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
       </div>
-      <div style="margin-top:8px">
-        <label for="client_id" style="font-size:0.85em">Client ID (app-level, for token exchange)</label>
+      <div class="field">
+        <label for="client_id">Client ID (app-level, for token exchange)</label>
         <input type="text" id="client_id" name="client_id"
                value="{{ config.get('services', {}).get('sonos', {}).get('client_id', '') }}"
                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
       </div>
-      <div style="margin-top:8px">
-        <label for="client_secret" style="font-size:0.85em">Client Secret (app-level, for token exchange)</label>
+      <div class="field">
+        <label for="client_secret">Client Secret (app-level, for token exchange)</label>
         <input type="text" id="client_secret" name="client_secret"
                value="{{ config.get('services', {}).get('sonos', {}).get('client_secret', '') }}"
                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
       </div>
-      <div style="margin-top:8px">
-        <label for="redirect_uri" style="font-size:0.85em">Redirect URI</label>
+      <div class="field">
+        <label for="redirect_uri">Redirect URI</label>
         <input type="text" id="redirect_uri" name="redirect_uri"
                value="{{ config.get('services', {}).get('sonos', {}).get('redirect_uri', '') }}"
                placeholder="https://vinyl-pi.local/sonos/callback" autocomplete="off">
       </div>
-      <button type="submit" class="save-btn" style="margin-top:12px">Save Credentials</button>
+      <button type="submit" class="save-btn">Save Credentials</button>
     </form>
   </div>
 </div>

@@ -6,8 +6,8 @@
   <a href="{{ url_for('settings') }}" class="settings-back">&#8249; Settings</a>
   <h1>Update</h1>
 
-  <div class="hw-section">
-    <div class="hw-section-title">Version</div>
+  <div class="settings-section">
+    <div class="settings-section-title">Version</div>
     <div class="hw-row">
       <span class="hw-label">Current</span>
       <span class="hw-value">v{{ version }}</span>
@@ -66,25 +66,27 @@
     </div>
     {% endif %}
 
-    <div class="hw-section" style="margin-top:1.5rem">
-      <div class="hw-section-title">Auto-Update</div>
-      <form method="POST" action="/update/auto" id="auto-update-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="hw-row">
-          <span class="hw-label">Automatically install updates</span>
-          <label class="toggle">
-            <input type="checkbox" name="auto_update" value="1"
-                   {% if auto_update %}checked{% endif %}
-                   onchange="document.getElementById('auto-update-form').submit()">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </form>
-      <p class="hint">When enabled, updates are checked and applied hourly.</p>
-    </div>
-
     {% endif %}
   </div>
+
+  {% if nfc_mode == 'pn532' %}
+  <div class="settings-section">
+    <div class="settings-section-title">Auto-Update</div>
+    <form method="POST" action="/update/auto" id="auto-update-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="hw-row">
+        <span class="hw-label">Automatically install updates</span>
+        <label class="toggle">
+          <input type="checkbox" name="auto_update" value="1"
+                 {% if auto_update %}checked{% endif %}
+                 onchange="document.getElementById('auto-update-form').submit()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </form>
+    <p class="hint">When enabled, updates are checked and applied hourly.</p>
+  </div>
+  {% endif %}
 </div>
 
 <script>

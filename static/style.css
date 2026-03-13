@@ -74,10 +74,15 @@
   --confirm-danger-hover: #bf360c;
 
   /* Tag type badges */
-  --badge-album-bg: #e3f2fd;
-  --badge-album-text: #1565c0;
-  --badge-track-bg: #f3e5f5;
-  --badge-track-text: #6a1b9a;
+  --badge-album-bg: #dbeafe;
+  --badge-album-text: #1e40af;
+  --badge-album-border: #93c5fd;
+  --badge-track-bg: #ede9fe;
+  --badge-track-text: #5b21b6;
+  --badge-track-border: #c4b5fd;
+  --badge-playlist-bg: #dcfce7;
+  --badge-playlist-text: #166534;
+  --badge-playlist-border: #86efac;
 
   /* Shape */
   --radius-sm: 4px;
@@ -201,7 +206,7 @@ main {
 .album-info { padding: 0.6rem 0.75rem 0.75rem; }
 .album-name { font-size: 0.85rem; font-weight: 600; line-height: 1.3; }
 .album-artist { font-size: 0.78rem; color: var(--text-2); margin-top: 0.2rem; }
-.result-album { font-size: 0.74rem; color: var(--text-4); margin-top: 0.1rem; }
+.result-album { font-size: 0.74rem; color: var(--text-3); margin-top: 0.1rem; }
 
 .loading, .empty { color: var(--text-3); padding: 0.5rem 0; }
 
@@ -234,9 +239,10 @@ main {
 .tag-string code {
   font-family: monospace;
   background: var(--surface-input);
+  border: 1px solid var(--border-subtle);
   padding: 0.15em 0.5em;
   border-radius: var(--radius-sm);
-  color: #ccc;
+  color: var(--text-2);
   user-select: all;
 }
 
@@ -587,8 +593,9 @@ a.track-name:hover { color: var(--text); text-decoration: underline; }
 .tag-artist { font-size: 0.8rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag-date { font-size: 0.75rem; color: var(--text-4); }
 .tag-type-badge { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.4rem; border-radius: var(--radius-sm); flex-shrink: 0; }
-.tag-type-album { background: var(--badge-album-bg); color: var(--badge-album-text); }
-.tag-type-track { background: var(--badge-track-bg); color: var(--badge-track-text); }
+.tag-type-album { background: var(--badge-album-bg); color: var(--badge-album-text); border: 1px solid var(--badge-album-border); }
+.tag-type-track { background: var(--badge-track-bg); color: var(--badge-track-text); border: 1px solid var(--badge-track-border); }
+.tag-type-playlist { background: var(--badge-playlist-bg); color: var(--badge-playlist-text); border: 1px solid var(--badge-playlist-border); }
 .tag-delete-btn { background: none; border: none; color: var(--text-3); font-size: 1rem; cursor: pointer; flex-shrink: 0; padding: 0.25rem; line-height: 1; }
 .tag-delete-btn:hover { color: var(--destructive-text); }
 main.has-now-playing { padding-bottom: 5rem; }
@@ -598,15 +605,15 @@ main.has-now-playing { padding-bottom: 5rem; }
 .log-output { background: var(--surface-input); border: 1px solid var(--border-subtle); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 0.75rem; line-height: 1.5; overflow-x: auto; overflow-y: auto; max-height: 70vh; white-space: pre; color: var(--text-2); }
 
 /* Hardware stats */
-.hw-section { margin-bottom: 1.5rem; }
-.hw-section-title { font-size: 0.75rem; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+.settings-section, .hw-section { margin-bottom: 1.75rem; }
+.settings-section-title, .hw-section-title { font-size: 0.75rem; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; margin-bottom: 0.75rem; }
+.settings-section-actions, .hw-actions { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem; }
 .hw-row { display: flex; justify-content: space-between; align-items: baseline; padding: 0.35rem 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.9rem; }
 .hw-row:last-child { border-bottom: none; }
 .hw-label { color: var(--text-2); }
 .hw-value { color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
 .hw-ok { color: var(--ok-text); }
 .hw-warn { color: var(--warn-text); }
-.hw-actions { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem; }
 
 /* Footer */
 .app-footer { text-align: center; padding: 1.5rem 0 2rem; color: var(--text-3); font-size: 0.75rem; }

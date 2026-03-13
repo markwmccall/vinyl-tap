@@ -14,3 +14,4 @@ certs/
 dev-server.log
 .mcp.json
 .claude/settings.json
+.claude/settings.json

@@ -44,11 +44,11 @@ All tests must pass before committing.
 app.py              Flask web app + NFC background thread
 player.py           CLI tool: --simulate (play without a card), --read (read one tag)
 apple_music.py      iTunes Search API: search albums/songs, fetch tracks
-sonos_controller.py Sonos SOAP/UPnP: queue and play tracks via SoCo
+sonos_player.py     Sonos SOAP/UPnP: queue and play tracks via SoCo
 nfc_interface.py    NFC abstraction: MockNFC (stdin), PN532NFC (Pi)
 updater.py          Standalone update script (launched detached by app.py)
-setup.sh            One-shot Pi setup script
-install.sh          One-curl fresh install from latest GitHub release
+scripts/setup.sh    One-shot Pi setup script
+scripts/install.sh  One-curl fresh install from latest GitHub release
 etc/                systemd service file
 config.json         Runtime config (not committed)
 templates/          Jinja2 HTML templates
@@ -88,7 +88,7 @@ sudo journalctl -u vinyl-web -f   # follow logs
 ## Creating a release
 
 ```bash
-./release.sh 1.0.0
+./scripts/release.sh 1.0.0
 ```
 
 This updates `VERSION`, commits, pushes, and creates the tag. GitHub Actions then runs tests and publishes the GitHub Release automatically.

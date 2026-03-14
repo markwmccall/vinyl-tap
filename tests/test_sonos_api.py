@@ -5,7 +5,7 @@ import urllib.error
 import pytest
 from unittest.mock import patch, MagicMock
 
-from providers.sonos_control import SonosControlClient, SonosAuthError
+from providers.sonos_api import SonosControlClient, SonosAuthError
 
 
 def make_response(data: dict):

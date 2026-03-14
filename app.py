@@ -20,21 +20,23 @@ from packaging.version import Version
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 
 import soco
-from nfc_interface import MockNFC, PN532NFC, parse_tag_data
+from core.nfc_interface import MockNFC, PN532NFC, parse_tag_data
 from providers import get_provider
-from sonos_controller import get_now_playing, get_speakers, get_volume, next_track, pause, play_album, play_playlist, prev_track, resume, set_volume, stop
+from core.sonos_player import get_now_playing, get_speakers, get_volume, next_track, pause, play_album, play_playlist, prev_track, resume, set_volume, stop
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 PROJECT_ROOT = Path(__file__).parent
 CONFIG_PATH = str(PROJECT_ROOT / "config.json")
-TAGS_PATH = str(PROJECT_ROOT / "tags.json")
+TAGS_PATH = str(PROJECT_ROOT / "data" / "tags.json")
 UPDATE_LOG = PROJECT_ROOT / "update.log"
-UPDATER_PATH = PROJECT_ROOT / "updater.py"
+UPDATER_PATH = PROJECT_ROOT / "core" / "updater.py"
 
 _VERSION_FILE = PROJECT_ROOT / "VERSION"
 VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else "0.0.0"
+
+IS_PRODUCTION = "INVOCATION_ID" in os.environ
 
 # Cache for GitHub release check: (timestamp, result_dict)
 _update_cache = None  # type: tuple | None  (timestamp, result_dict)
@@ -119,7 +121,7 @@ def _configure_sonos():
     if not (access_token and refresh_token and household_id and client_key and client_secret):
         return
 
-    from providers.sonos_control import SonosControlClient
+    from providers.sonos_api import SonosControlClient
     client = SonosControlClient(client_key, client_secret)
 
     def _on_sonos_token_refresh(new_access_token, new_refresh_token):
@@ -777,7 +779,7 @@ def sonos_auth():
     if not (client_key and client_secret and redirect_uri):
         return jsonify({"error": "Sonos client credentials not configured"}), 400
 
-    from providers.sonos_control import SonosControlClient
+    from providers.sonos_api import SonosControlClient
     client = SonosControlClient(client_key, client_secret)
     state = secrets.token_hex(16)
     session["sonos_oauth_state"] = state
@@ -816,7 +818,7 @@ def sonos_callback():
         client_secret = sonos_cfg.get("client_secret")
         redirect_uri = sonos_cfg.get("redirect_uri")
 
-        from providers.sonos_control import SonosControlClient
+        from providers.sonos_api import SonosControlClient
         client = SonosControlClient(client_key, client_secret)
         access_token, refresh_token, _ = client.exchange_code(code, redirect_uri)
 
@@ -880,20 +882,16 @@ def sonos_disconnect():
 
 @app.route("/settings/nfc", methods=["GET", "POST"])
 def settings_nfc():
-    config = _load_config()
-    saved = False
     if request.method == "POST":
+        config = _load_config()
         token = request.form.get("csrf_token", "")
         if not token or token != session.get("csrf_token"):
             abort(403)
         config["nfc_mode"] = request.form.get("nfc_mode", config["nfc_mode"])
         with open(CONFIG_PATH, "w") as f:
             json.dump(config, f, indent=2)
-        saved = True
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_hex(32)
-    return render_template("settings_nfc.html", config=config, saved=saved,
-                           csrf_token=session["csrf_token"])
+        return redirect(url_for("settings_hardware", nfc_saved=1))
+    return redirect(url_for("settings_hardware"))
 
 
 @app.route("/settings/sticker")
@@ -909,9 +907,12 @@ def settings_reboot():
         token = request.form.get("csrf_token", "")
         if not token or token != session.get("csrf_token"):
             abort(403)
+        if not IS_PRODUCTION:
+            abort(403)
         subprocess.Popen(["sudo", "reboot"])
         return redirect(url_for("settings_hardware", rebooting=1))
     return render_template("settings_reboot.html", rebooting=False,
+                           is_production=IS_PRODUCTION,
                            csrf_token=session["csrf_token"])
 
 
@@ -919,6 +920,8 @@ def settings_reboot():
 def settings_restart():
     token = request.form.get("csrf_token", "")
     if not token or token != session.get("csrf_token"):
+        abort(403)
+    if not IS_PRODUCTION:
         abort(403)
     subprocess.Popen(["sudo", "systemctl", "restart", "vinyl-web"])
     return redirect(url_for("settings_hardware", restarting=1))
@@ -930,9 +933,12 @@ def settings_hardware():
         session["csrf_token"] = secrets.token_hex(32)
     restarting = request.args.get("restarting") == "1"
     rebooting = request.args.get("rebooting") == "1"
+    nfc_saved = request.args.get("nfc_saved") == "1"
     hw = _get_hardware_stats()
+    config = _load_config()
     return render_template("settings_hardware.html", csrf_token=session["csrf_token"],
-                           restarting=restarting, rebooting=rebooting, hw=hw)
+                           restarting=restarting, rebooting=rebooting, hw=hw,
+                           is_production=IS_PRODUCTION, config=config, nfc_saved=nfc_saved)
 
 
 
@@ -1002,8 +1008,7 @@ def settings_update():
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_hex(32)
     config = _load_config()
-    nfc_mode = config.get("nfc_mode", "mock")
-    update_info = _check_for_update() if nfc_mode == "pn532" else None
+    update_info = _check_for_update() if IS_PRODUCTION else None
     state, log_lines = _read_update_state()
     if state == "success":
         UPDATE_LOG.unlink(missing_ok=True)
@@ -1012,7 +1017,7 @@ def settings_update():
         csrf_token=session["csrf_token"],
         version=VERSION,
         update_info=update_info,
-        nfc_mode=nfc_mode,
+        is_production=IS_PRODUCTION,
         update_state=state,
         log_lines=log_lines,
         auto_update=config.get("auto_update", False),
@@ -1336,7 +1341,7 @@ def _sigterm_handler(signum, frame):
 
 if __name__ == "__main__":  # pragma: no cover
     logging.basicConfig(level=logging.DEBUG)
-    logging.getLogger("providers.sonos_control").setLevel(logging.DEBUG)
+    logging.getLogger("providers.sonos_api").setLevel(logging.DEBUG)
     signal.signal(signal.SIGTERM, _sigterm_handler)
     parser = argparse.ArgumentParser(description="Vinyl emulator web UI")
     parser.add_argument("--host", default="127.0.0.1",

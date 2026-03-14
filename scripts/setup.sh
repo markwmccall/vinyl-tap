@@ -1,7 +1,7 @@
 #!/bin/bash
 # Vinyl Emulator - Raspberry Pi setup script
 # Run once after cloning the repo on the Pi:
-#   chmod +x setup.sh && ./setup.sh
+#   chmod +x scripts/setup.sh && ./scripts/setup.sh
 #
 # After the script finishes it will prompt you to reboot (required for SPI).
 # After rebooting, open http://vinyl-pi.local:5000 in your browser,
@@ -9,7 +9,7 @@
 
 set -e
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 USERNAME="$(whoami)"
 
 echo ""

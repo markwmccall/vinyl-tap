@@ -418,17 +418,12 @@ class TestSettings:
     def test_renders_menu_rows(self, client, temp_config):
         resp = client.get("/settings")
         assert b"/settings/sonos" in resp.data
-        assert b"/settings/nfc" in resp.data
         assert b"/settings/sticker" in resp.data
         assert b"/settings/hardware" in resp.data
 
     def test_shows_speaker_detail(self, client, temp_config):
         resp = client.get("/settings")
         assert b"Family Room" in resp.data
-
-    def test_shows_nfc_detail(self, client, temp_config):
-        resp = client.get("/settings")
-        assert b"mock" in resp.data
 
 
 class TestSettingsSonos:
@@ -480,9 +475,10 @@ class TestSettingsSonos:
 
 
 class TestSettingsNfc:
-    def test_get_returns_200(self, client, temp_config):
+    def test_get_redirects_to_hardware(self, client, temp_config):
         resp = client.get("/settings/nfc")
-        assert resp.status_code == 200
+        assert resp.status_code == 302
+        assert "/settings/hardware" in resp.headers["Location"]
 
     def test_post_saves_nfc_mode(self, client, temp_config):
         with client.session_transaction() as sess:
@@ -494,15 +490,15 @@ class TestSettingsNfc:
         saved = json.loads(temp_config.read_text())
         assert saved["nfc_mode"] == "pn532"
 
-    def test_post_sets_saved_flag(self, client, temp_config):
+    def test_post_redirects_with_saved_flag(self, client, temp_config):
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
         resp = client.post("/settings/nfc", data={
             "nfc_mode": "mock",
             "csrf_token": "test-token",
         })
-        assert resp.status_code == 200
-        assert b"saved" in resp.data.lower()
+        assert resp.status_code == 302
+        assert "nfc_saved=1" in resp.headers["Location"]
 
     def test_post_csrf_missing_returns_403(self, client, temp_config):
         with client.session_transaction() as sess:
@@ -530,7 +526,9 @@ class TestSettingsReboot:
         resp = client.get("/settings/reboot")
         assert resp.status_code == 200
 
-    def test_post_calls_popen(self, client, temp_config):
+    def test_post_calls_popen(self, client, temp_config, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "IS_PRODUCTION", True)
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
         with patch("app.subprocess.Popen") as mock_popen:
@@ -538,7 +536,9 @@ class TestSettingsReboot:
         assert resp.status_code == 302
         mock_popen.assert_called_once_with(["sudo", "reboot"])
 
-    def test_post_redirects_to_hardware_with_rebooting(self, client, temp_config):
+    def test_post_redirects_to_hardware_with_rebooting(self, client, temp_config, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "IS_PRODUCTION", True)
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
         with patch("app.subprocess.Popen"):
@@ -576,7 +576,9 @@ class TestSettingsHardware:
             resp = client.get("/settings/hardware")
         assert resp.status_code == 200
 
-    def test_renders_restart_and_reboot_buttons(self, client, temp_config):
+    def test_renders_restart_and_reboot_buttons(self, client, temp_config, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "IS_PRODUCTION", True)
         with patch("app._get_hardware_stats", return_value=FAKE_HW_STATS):
             resp = client.get("/settings/hardware")
         assert b"/settings/restart" in resp.data
@@ -775,7 +777,9 @@ class TestGetHardwareStats:
 
 
 class TestSettingsRestart:
-    def test_post_calls_systemctl_restart(self, client, temp_config):
+    def test_post_calls_systemctl_restart(self, client, temp_config, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "IS_PRODUCTION", True)
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
         with patch("app.subprocess.Popen") as mock_popen:
@@ -783,7 +787,9 @@ class TestSettingsRestart:
         assert resp.status_code == 302
         mock_popen.assert_called_once_with(["sudo", "systemctl", "restart", "vinyl-web"])
 
-    def test_post_redirects_to_hardware_with_restarting(self, client, temp_config):
+    def test_post_redirects_to_hardware_with_restarting(self, client, temp_config, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "IS_PRODUCTION", True)
         with client.session_transaction() as sess:
             sess["csrf_token"] = "test-token"
         with patch("app.subprocess.Popen"):
@@ -1073,7 +1079,7 @@ class TestLogs:
         with patch("subprocess.run", side_effect=FileNotFoundError):
             resp = client.get("/logs")
         assert resp.status_code == 200
-        assert b"only available when running under systemd" in resp.data
+        assert b"only available in production" in resp.data
 
 
 class TestTransport:
@@ -1647,7 +1653,7 @@ class TestMakeNfc:
 
     def test_mock_mode_returns_mock_nfc(self):
         import app
-        from nfc_interface import MockNFC
+        from core.nfc_interface import MockNFC
         nfc = app._make_nfc({"nfc_mode": "mock"})
         assert isinstance(nfc, MockNFC)
 
@@ -1689,24 +1695,20 @@ class TestSettingsUpdatePage:
         resp = client.get("/settings/update")
         assert app.VERSION.encode() in resp.data
 
-    def test_mock_mode_hides_update_controls(self, client, temp_config):
-        # temp_config sets nfc_mode=mock; update controls should not appear
+    def test_dev_mode_hides_update_controls(self, client, temp_config, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "IS_PRODUCTION", False)
         resp = client.get("/settings/update")
         assert b"update-controls" not in resp.data
 
-    def test_pn532_mode_shows_update_info(self, client, tmp_path, monkeypatch):
-        import app, json
-        config_file = tmp_path / "config_pi.json"
-        config_file.write_text(json.dumps({
-            "sn": "3", "speaker_ip": "10.0.0.12", "nfc_mode": "pn532"
-        }))
-        monkeypatch.setattr(app, "CONFIG_PATH", str(config_file))
+    def test_production_mode_shows_update_info(self, client, temp_config, monkeypatch):
+        import app
+        monkeypatch.setattr(app, "IS_PRODUCTION", True)
         monkeypatch.setattr(app, "_update_cache", None)
         with patch("app._check_for_update", return_value={
             "current": "0.1.0", "latest": "0.1.0", "update_available": False
         }):
             resp = client.get("/settings/update")
-        # pn532 mode shows the latest version info
         assert b"up to date" in resp.data
 
     def test_updating_flag_shows_log_section(self, client, temp_config):

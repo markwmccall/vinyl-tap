@@ -10,7 +10,7 @@
   </div>
 
   {% if log_output is none %}
-    <p class="hint">Logs are only available when running under systemd on the Raspberry Pi.<br>
+    <p class="hint">Logs are only available in production.<br>
     Use <code>sudo journalctl -u vinyl-web -f</code> in a terminal to follow logs.</p>
   {% else %}
     <pre id="log-output" class="log-output">{{ log_output }}</pre>

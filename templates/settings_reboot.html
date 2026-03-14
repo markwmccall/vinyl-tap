@@ -8,12 +8,14 @@
 
   {% if rebooting %}
   <div class="banner success">Rebooting... the server will be unavailable for ~30 seconds.</div>
+  {% elif not is_production %}
+  <p class="hint">Reboot is only available in production.</p>
   {% else %}
-  <p>Restart the Raspberry Pi. The web UI will be unavailable for ~30 seconds.</p>
+  <p>Restart the device. The web UI will be unavailable for ~30 seconds.</p>
   <form method="POST" action="/settings/reboot">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button type="submit" class="save-btn reboot-btn"
-            onclick="return confirm('Reboot the Raspberry Pi?')">Reboot Raspberry Pi</button>
+            onclick="return confirm('Reboot the device?')">Reboot</button>
   </form>
   {% endif %}
 </div>

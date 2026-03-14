@@ -12,6 +12,9 @@
   {% elif rebooting %}
   <div class="banner success">Rebooting... the server will be unavailable for ~30 seconds.</div>
   <script>history.replaceState(null, '', '/settings/hardware');</script>
+  {% elif nfc_saved %}
+  <div class="banner success">NFC settings saved.</div>
+  <script>history.replaceState(null, '', '/settings/hardware');</script>
   {% endif %}
 
   <div class="hw-section">
@@ -94,6 +97,17 @@
         {{ 'Connected' if hw.nfc_connected else 'Not connected' }}
       </span>
     </div>
+    <form method="POST" action="/settings/nfc" style="margin-top:0.75rem">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field">
+        <label for="nfc_mode">Mode</label>
+        <select id="nfc_mode" name="nfc_mode">
+          <option value="mock" {% if config.nfc_mode == 'mock' %}selected{% endif %}>mock (no hardware)</option>
+          <option value="pn532" {% if config.nfc_mode == 'pn532' %}selected{% endif %}>pn532 (hardware)</option>
+        </select>
+      </div>
+      <button type="submit" class="save-btn">Save</button>
+    </form>
   </div>
 
   {% if hw.throttle_ok is not none %}
@@ -112,6 +126,10 @@
 
   <div class="settings-section settings-section-actions">
     <div class="settings-section-title">Actions</div>
+    {% if not is_production %}
+    <p class="hint">Restart and reboot are only available in production.</p>
+    {% endif %}
+    {% if is_production %}
     <div class="field">
       <label>Restart App</label>
       <p class="hint">Restart just the vinyl-web service. Faster than a full reboot - unavailable for ~5 seconds.</p>
@@ -121,15 +139,18 @@
                 onclick="return confirm('Restart the vinyl-web service?')">Restart App</button>
       </form>
     </div>
+    {% endif %}
+    {% if is_production %}
     <div class="field">
       <label>Reboot</label>
-      <p class="hint">Restart the Raspberry Pi. The web UI will be unavailable for ~30 seconds.</p>
+      <p class="hint">Restart the device. The web UI will be unavailable for ~30 seconds.</p>
       <form method="POST" action="/settings/reboot">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="save-btn reboot-btn"
-                onclick="return confirm('Reboot the Raspberry Pi?')">Reboot Raspberry Pi</button>
+                onclick="return confirm('Reboot the device?')">Reboot</button>
       </form>
     </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

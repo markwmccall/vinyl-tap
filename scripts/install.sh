@@ -2,7 +2,7 @@
 # Vinyl Emulator — fresh install on Raspberry Pi OS
 #
 # Run:
-#   curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-emulator/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-emulator/main/scripts/install.sh | bash
 #
 # This script downloads the latest release and runs setup.sh.
 # Requires: curl, python3, git
@@ -52,5 +52,5 @@ echo ""
 
 # Run setup
 cd "$INSTALL_DIR"
-chmod +x setup.sh
-./setup.sh
+chmod +x scripts/setup.sh
+./scripts/setup.sh

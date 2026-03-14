@@ -15,11 +15,7 @@
       <span class="settings-row-detail">{% if config.get('services', {}).get('sonos', {}).get('access_token') %}Connected{% else %}Not connected{% endif %}</span>
       <span class="settings-chevron">&#8250;</span>
     </a></li>
-    <li><a href="{{ url_for('settings_nfc') }}" class="settings-row">
-      <span class="settings-row-title">NFC</span>
-      <span class="settings-row-detail">{{ config.nfc_mode }}</span>
-      <span class="settings-chevron">&#8250;</span>
-    </a></li>
+
 <li><a href="{{ url_for('logs') }}" class="settings-row">
       <span class="settings-row-title">Logs</span>
       <span class="settings-chevron">&#8250;</span>

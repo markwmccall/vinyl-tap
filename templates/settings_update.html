@@ -13,8 +13,8 @@
       <span class="hw-value">v{{ version }}</span>
     </div>
 
-    {% if nfc_mode != 'pn532' %}
-    <p class="hint">Updates are only available when running on a Raspberry Pi.</p>
+    {% if not is_production %}
+    <p class="hint">Updates are only available in production.</p>
 
     {% else %}
 
@@ -69,7 +69,7 @@
     {% endif %}
   </div>
 
-  {% if nfc_mode == 'pn532' %}
+  {% if is_production %}
   <div class="settings-section">
     <div class="settings-section-title">Auto-Update</div>
     <form method="POST" action="/update/auto" id="auto-update-form">

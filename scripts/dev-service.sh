@@ -4,12 +4,13 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CERTS_DIR="$SCRIPT_DIR/certs"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+CERTS_DIR="$PROJECT_ROOT/certs"
 CERT="$CERTS_DIR/vinyl-mac.local.crt"
 KEY="$CERTS_DIR/vinyl-mac.local.key"
-VENV_PYTHON="$SCRIPT_DIR/.venv/bin/python"
-APP="$SCRIPT_DIR/app.py"
-LOG="$SCRIPT_DIR/dev-server.log"
+VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
+APP="$PROJECT_ROOT/app.py"
+LOG="$PROJECT_ROOT/dev-server.log"
 PGREP_PATTERN="python.*app\.py"
 
 _pid() {
@@ -20,11 +21,11 @@ _pid() {
 
 _check_prereqs() {
   if [ ! -f "$VENV_PYTHON" ]; then
-    echo "[!] Virtual environment not found. Run ./dev-setup.sh first."
+    echo "[!] Virtual environment not found. Run ./scripts/dev-setup.sh first."
     exit 1
   fi
   if [ ! -f "$CERT" ] || [ ! -f "$KEY" ]; then
-    echo "[!] SSL certs not found. Run ./dev-setup.sh first."
+    echo "[!] SSL certs not found. Run ./scripts/dev-setup.sh first."
     exit 1
   fi
 }

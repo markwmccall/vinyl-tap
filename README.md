@@ -80,7 +80,7 @@ You should see `/dev/spidev0.0`. If nothing appears, check that the HAT is firml
 ### 4. Install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-emulator/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-emulator/main/scripts/install.sh | bash
 ```
 
 This downloads the latest release and runs setup — installs dependencies, enables SPI, generates an SSL certificate, creates the config, and installs the `vinyl-web` systemd service. It will prompt you to reboot at the end.
@@ -112,7 +112,7 @@ Open `http://your-hostname.local` in your browser, go to **Settings → Update**
 - Confirm the DIP switches on the HAT are set to SPI mode (I0=L, I1=H) — see the [Waveshare PN532 HAT wiki](https://www.waveshare.com/wiki/PN532_NFC_HAT)
 - Check the HAT is firmly seated — all 40 pins engaged
 - Verify with `ls /dev/spidev*` — you should see `/dev/spidev0.0`
-- If `/dev/spidev0.0` is missing, SPI may not be enabled — re-run `setup.sh` or run `sudo raspi-config` and enable SPI under Interface Options
+- If `/dev/spidev0.0` is missing, SPI may not be enabled — re-run `scripts/setup.sh` or run `sudo raspi-config` and enable SPI under Interface Options
 
 **Music doesn't play after tapping a card**
 - Check `sudo systemctl status vinyl-web` for errors

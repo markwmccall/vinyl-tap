@@ -24,7 +24,7 @@ def _rediscover_speaker(speaker_name, config_path):
             with open(config_path, "w") as f:
                 json.dump(config, f, indent=2)
             return d.ip_address
-    raise Exception(f"Speaker '{speaker_name}' not found on network")
+    raise RuntimeError(f"Speaker '{speaker_name}' not found on network")
 
 
 def get_now_playing(speaker_ip):

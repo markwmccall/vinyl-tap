@@ -110,7 +110,8 @@ def _configure_sonos():
     """If Sonos Control API tokens are present in config, configure providers."""
     try:
         config = _load_config()
-    except Exception:
+    except Exception as e:
+        log.warning("_configure_sonos: failed to load config: %s", e)
         return
     sonos_cfg = config.get("services", {}).get("sonos", {})
     access_token = sonos_cfg.get("access_token")
@@ -148,7 +149,8 @@ def _configure_smapi():
     """If SMAPI tokens are present in config, configure the Apple Music provider."""
     try:
         config = _load_config()
-    except Exception:
+    except Exception as e:
+        log.warning("_configure_smapi: failed to load config: %s", e)
         return
     apple_cfg = config.get("services", {}).get("apple", {})
     token = apple_cfg.get("smapi_token")
@@ -443,7 +445,7 @@ def _nfc_loop(config_path):
                            speaker_name=config.get("speaker_name"), config_path=config_path)
             log.info(f"Playing {tag['type']} {tag['id']}")
         except Exception as e:
-            log.error(f"NFC play error: {e}")
+            log.error("NFC play error: %s", e, exc_info=True)
 
 
 def _start_nfc_thread(config_path):
@@ -454,7 +456,8 @@ def _start_nfc_thread(config_path):
     global _nfc
     try:
         config = _load_config()
-    except Exception:
+    except Exception as e:
+        log.warning("_start_nfc_thread: failed to load config: %s", e)
         return
     if config.get("nfc_mode") != "pn532":
         return
@@ -909,7 +912,11 @@ def settings_reboot():
             abort(403)
         if not IS_PRODUCTION:
             abort(403)
-        subprocess.Popen(["sudo", "reboot"])
+        try:
+            subprocess.Popen(["sudo", "reboot"])
+        except OSError as e:
+            log.error("Failed to launch reboot: %s", e)
+            abort(500)
         return redirect(url_for("settings_hardware", rebooting=1))
     return render_template("settings_reboot.html", rebooting=False,
                            is_production=IS_PRODUCTION,
@@ -923,7 +930,11 @@ def settings_restart():
         abort(403)
     if not IS_PRODUCTION:
         abort(403)
-    subprocess.Popen(["sudo", "systemctl", "restart", "vinyl-web"])
+    try:
+        subprocess.Popen(["sudo", "systemctl", "restart", "vinyl-web"])
+    except OSError as e:
+        log.error("Failed to launch restart: %s", e)
+        abort(500)
     return redirect(url_for("settings_hardware", restarting=1))
 
 
@@ -969,8 +980,8 @@ def _check_for_update() -> dict:
         if latest:
             result["latest"] = latest
             result["update_available"] = Version(latest) > Version(VERSION)
-    except Exception:
-        pass  # fail open: return current version, no update available
+    except Exception as e:
+        log.warning("Update check failed: %s", e)  # fail open: return current version
 
     _update_cache = (now, result)
     return result
@@ -1043,14 +1054,14 @@ def update_apply():
         return jsonify({"error": "Update already in progress"}), 409
     info = _check_for_update()
     target = info.get("latest", VERSION)
-    log_file = open(UPDATE_LOG, "w")
-    subprocess.Popen(
-        [sys.executable, str(UPDATER_PATH), target],
-        cwd=str(PROJECT_ROOT),
-        start_new_session=True,
-        stdout=log_file,
-        stderr=log_file,
-    )
+    with open(UPDATE_LOG, "w") as log_file:
+        subprocess.Popen(
+            [sys.executable, str(UPDATER_PATH), target],
+            cwd=str(PROJECT_ROOT),
+            start_new_session=True,
+            stdout=log_file,
+            stderr=log_file,
+        )
     return redirect(url_for("settings_update", updating=1))
 
 

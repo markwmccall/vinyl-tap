@@ -15,7 +15,6 @@ from datetime import datetime
 from pathlib import Path
 
 import psutil
-from packaging.version import Version
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 
@@ -24,24 +23,15 @@ from core.nfc_interface import MockNFC, PN532NFC, parse_tag_data
 from providers import get_provider
 from core.sonos_player import get_now_playing, get_speakers, get_volume, next_track, pause, play_album, play_playlist, prev_track, resume, set_volume, stop
 
+import core.nfc_service as nfc_service
+import core.updater_service as updater_service
+from core.config import CONFIG_PATH, TAGS_PATH, PROJECT_ROOT, VERSION, _load_config, _save_config, _load_tags, _save_tags
+from core.updater_service import _check_for_update, _read_update_state, _auto_update_loop
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
-PROJECT_ROOT = Path(__file__).parent
-CONFIG_PATH = str(PROJECT_ROOT / "config.json")
-TAGS_PATH = str(PROJECT_ROOT / "data" / "tags.json")
-UPDATE_LOG = PROJECT_ROOT / "update.log"
-UPDATER_PATH = PROJECT_ROOT / "core" / "updater.py"
-
-_VERSION_FILE = PROJECT_ROOT / "VERSION"
-VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else "0.0.0"
-
 IS_PRODUCTION = "INVOCATION_ID" in os.environ
-
-# Cache for GitHub release check: (timestamp, result_dict)
-_update_cache = None  # type: tuple | None  (timestamp, result_dict)
-_UPDATE_CACHE_TTL = 3600  # 1 hour
-GITHUB_REPO = "markwmccall/vinyl-emulator"
 
 log = logging.getLogger(__name__)
 
@@ -49,17 +39,6 @@ log = logging.getLogger(__name__)
 @app.context_processor
 def _inject_version():
     return {"app_version": VERSION}
-
-# Shared NFC device and lock used by the background polling thread and web routes.
-_nfc_lock = threading.Lock()
-_nfc = None
-_nfc_last_tag = None       # debounce: last tag seen by the loop
-_web_read_pending = threading.Event()  # set while /read-tag is waiting for a card
-_nfc_read_queue = queue.Queue(maxsize=1)  # loop posts here when _web_read_pending
-
-# Watchdog: after this many consecutive errors, back off polling and warn.
-_NFC_MAX_CONSECUTIVE_ERRORS = 5
-_NFC_BACKOFF_SECS = 30
 
 
 def _get_household_id_upnp(speaker_ip: str) -> str:
@@ -88,28 +67,6 @@ def _get_household_id_upnp(speaker_ip: str) -> str:
     except Exception as e:
         log.warning("Could not get household ID from speaker: %s", e)
         return ""
-
-
-def _load_config():
-    with open(CONFIG_PATH) as f:
-        config = json.load(f)
-    # In-memory migration: flat "sn" → services.apple.sn (and vice versa)
-    if "sn" in config and "services" not in config:
-        config.setdefault("services", {}).setdefault("apple", {})
-        config["services"]["apple"]["sn"] = config["sn"]
-    elif "services" in config and "apple" in config["services"]:
-        config.setdefault("sn", config["services"]["apple"].get("sn"))
-    required = ["speaker_ip", "sn", "nfc_mode"]
-    missing = [k for k in required if k not in config]
-    if missing:
-        raise RuntimeError(f"Missing required config fields: {', '.join(missing)}")
-    return config
-
-
-def _save_config(config):
-    """Persist config dict to CONFIG_PATH."""
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=2)
 
 
 def _configure_sonos():
@@ -279,26 +236,11 @@ def _get_hardware_stats():
         "disk_free":      _fmt_bytes(disk.free) if disk else None,
         "disk_total":     _fmt_bytes(disk.total) if disk else None,
         "disk_percent":   disk.percent if disk else None,
-        "nfc_connected":  _nfc is not None,
+        "nfc_connected":  nfc_service.get_nfc() is not None,
         "throttle_ok":    throttle[0] if throttle else None,
         "throttle_flags": throttle[1] if throttle else None,
     }
 
-
-
-def _load_tags():
-    if not os.path.exists(TAGS_PATH):
-        return []
-    try:
-        with open(TAGS_PATH) as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        return []
-
-
-def _save_tags(tags):
-    with open(TAGS_PATH, "w") as f:
-        json.dump(tags, f, indent=2)
 
 
 def _record_tag(tag_string, tag_type, name, artist, artwork_url, album_id=None, track_id=None, playlist_id=None):
@@ -328,116 +270,6 @@ def _make_nfc(config):
                 "run setup.sh on a Raspberry Pi to install them"
             )
     return MockNFC()
-
-
-def _nfc_loop(config_path):
-    """Background NFC polling loop with debounce. Runs in a daemon thread.
-
-    Holds _nfc_lock only during the SPI read (up to 0.5 s). Releases it
-    before calling play_album so web routes never wait on a Sonos network call.
-
-    When _web_read_pending is set, the loop delivers the next read result to
-    _nfc_read_queue instead of playing, eliminating the race with /read-tag.
-
-    Tracks consecutive errors. After _NFC_MAX_CONSECUTIVE_ERRORS failures
-    it logs a warning and backs off to _NFC_BACKOFF_SECS between retries.
-    """
-    global _nfc_last_tag
-    consecutive_errors = 0
-    polls_since_log = 0
-    error_start_time = None
-    _NFC_HEARTBEAT_POLLS = 3600  # log heartbeat roughly every 30 min (at ~0.5s/poll)
-    while True:
-        try:
-            with _nfc_lock:
-                tag_data = _nfc.read_tag()
-            if consecutive_errors:
-                outage_secs = time.time() - error_start_time if error_start_time else 0
-                log.info(
-                    "NFC reader recovered after %d consecutive errors (outage %.0fs)",
-                    consecutive_errors, outage_secs,
-                )
-                error_start_time = None
-            consecutive_errors = 0
-            polls_since_log += 1
-            if polls_since_log >= _NFC_HEARTBEAT_POLLS:
-                log.info("NFC heartbeat: reader healthy, polling normally")
-                polls_since_log = 0
-        except Exception as e:
-            consecutive_errors += 1
-            if consecutive_errors == 1:
-                error_start_time = time.time()
-            if consecutive_errors < _NFC_MAX_CONSECUTIVE_ERRORS:
-                log.error("NFC read error (%d/%d): %s",
-                          consecutive_errors, _NFC_MAX_CONSECUTIVE_ERRORS, e)
-            elif consecutive_errors == _NFC_MAX_CONSECUTIVE_ERRORS:
-                log.error(
-                    "NFC reader unresponsive after %d consecutive errors (%s). "
-                    "Will keep retrying every %ds.",
-                    consecutive_errors, e, _NFC_BACKOFF_SECS,
-                )
-            if consecutive_errors >= _NFC_MAX_CONSECUTIVE_ERRORS:
-                time.sleep(_NFC_BACKOFF_SECS)
-            continue
-
-        if tag_data is None:
-            _nfc_last_tag = None
-            continue
-
-        if _web_read_pending.is_set():
-            # /read-tag is waiting — hand off the result, skip playback.
-            # Check before debounce so a card already on the reader is delivered.
-            _nfc_last_tag = tag_data
-            try:
-                _nfc_read_queue.put_nowait(tag_data)
-            except queue.Full:
-                pass
-            continue  # pragma: no cover
-
-        if tag_data == _nfc_last_tag:
-            continue  # same card still present - ignore
-
-        _nfc_last_tag = tag_data
-        try:
-            tag = parse_tag_data(tag_data)
-            provider = get_provider(tag["service"])
-            config = _load_config()
-            if tag["type"] == "playlist":
-                info = provider.get_playlist_info(tag["id"]) or {}
-                play_playlist(config["speaker_ip"], tag["id"], info.get("title", ""),
-                              provider, config["sn"],
-                              speaker_name=config.get("speaker_name"), config_path=config_path)
-            else:
-                tracks = (provider.get_track(tag["id"]) if tag["type"] == "track"
-                          else provider.get_album_tracks(tag["id"]))
-                play_album(config["speaker_ip"], tracks, provider, config["sn"],
-                           speaker_name=config.get("speaker_name"), config_path=config_path)
-            log.info("Playing %s %s", tag['type'], tag['id'])
-        except Exception as e:
-            log.error("NFC play error: %s", e, exc_info=True)
-
-
-def _start_nfc_thread(config_path):
-    """Initialise the shared NFC device and start the background polling thread.
-
-    Only active in pn532 mode. No-op in mock mode so local dev is unaffected.
-    """
-    global _nfc
-    try:
-        config = _load_config()
-    except Exception as e:
-        log.warning("_start_nfc_thread: failed to load config: %s", e)
-        return
-    if config.get("nfc_mode") != "pn532":
-        return
-    try:
-        _nfc = PN532NFC()
-    except Exception as e:
-        log.error("Failed to initialise PN532: %s", e)
-        return
-    t = threading.Thread(target=_nfc_loop, args=(config_path,), daemon=True)
-    t.start()
-    log.info("NFC thread started")
 
 
 def _format_existing_tag(tag_string):
@@ -586,13 +418,13 @@ def write_tag():
     force = data.get("force", False)
 
     if config.get("nfc_mode") == "pn532":
-        if _nfc is None:
+        if nfc_service.get_nfc() is None:
             return jsonify({"error": "NFC not initialised"}), 503
-        acquired = _nfc_lock.acquire(timeout=2.0)
+        acquired = nfc_service._nfc_lock.acquire(timeout=2.0)
         if not acquired:
             return jsonify({"error": "NFC busy, try again"}), 503
         try:
-            pre_read = _nfc.read_tag()
+            pre_read = nfc_service.get_nfc().read_tag()
             if not force and pre_read:
                 return jsonify({
                     "status": "confirm",
@@ -600,13 +432,13 @@ def write_tag():
                     "existing_display": _format_existing_tag(pre_read),
                 })
             try:
-                _nfc.write_tag(tag_data)
+                nfc_service.get_nfc().write_tag(tag_data)
             except IOError as e:
                 if pre_read is None:
                     return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
         finally:
-            _nfc_lock.release()
+            nfc_service._nfc_lock.release()
     else:
         try:
             nfc = _make_nfc(config)
@@ -629,15 +461,15 @@ def write_url_tag():
     url = request.host_url.rstrip("/")
     config = _load_config()
     if config.get("nfc_mode") == "pn532":
-        if _nfc is None:
+        if nfc_service.get_nfc() is None:
             return jsonify({"error": "NFC not initialised"}), 503
-        acquired = _nfc_lock.acquire(timeout=2.0)
+        acquired = nfc_service._nfc_lock.acquire(timeout=2.0)
         if not acquired:
             return jsonify({"error": "NFC busy, try again"}), 503
         try:
-            pre_read = _nfc.read_tag()
+            pre_read = nfc_service.get_nfc().read_tag()
             try:
-                _nfc.write_url_tag(url)
+                nfc_service.get_nfc().write_url_tag(url)
             except NotImplementedError as e:
                 return jsonify({"error": str(e)}), 501
             except IOError as e:
@@ -645,7 +477,7 @@ def write_url_tag():
                     return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
         finally:
-            _nfc_lock.release()
+            nfc_service._nfc_lock.release()
     else:
         try:
             nfc = _make_nfc(config)
@@ -920,61 +752,6 @@ _PLACEHOLDERS = {
 }
 
 
-def _check_for_update() -> dict:
-    """Return update info, using a 1-hour in-memory cache."""
-    global _update_cache
-    now = time.time()
-    if _update_cache and now - _update_cache[0] < _UPDATE_CACHE_TTL:
-        return _update_cache[1]
-
-    result = {"current": VERSION, "latest": VERSION, "update_available": False}
-    try:
-        import requests as _req
-        resp = _req.get(
-            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
-            timeout=5,
-            headers={"Accept": "application/vnd.github+json"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        latest = data.get("tag_name", "").lstrip("v")
-        if latest:
-            result["latest"] = latest
-            result["update_available"] = Version(latest) > Version(VERSION)
-    except Exception as e:
-        log.warning("Update check failed: %s", e)  # fail open: return current version
-
-    _update_cache = (now, result)
-    return result
-
-
-def _read_update_state():
-    """Return (state, log_lines) from update.log. state is 'idle' if no log.
-
-    If state is 'running' but the recorded PID is no longer alive, treats the
-    state as 'failed' so a crashed updater doesn't permanently show 'updating'.
-    """
-    if not UPDATE_LOG.exists():
-        return "idle", []
-    lines = UPDATE_LOG.read_text().splitlines()
-    state = "idle"
-    pid = None
-    for line in lines:
-        if line.startswith("PID:"):
-            try:
-                pid = int(line.split(":", 1)[1].strip())
-            except ValueError:
-                pass
-        if line.startswith("STATE:"):
-            state = line.split(":", 1)[1].strip()
-    if state == "running" and pid is not None:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            state = "failed"
-    return state, lines[-20:]
-
-
 @app.route("/settings/update")
 def settings_update():
     if "csrf_token" not in session:
@@ -983,7 +760,7 @@ def settings_update():
     update_info = _check_for_update() if IS_PRODUCTION else None
     state, log_lines = _read_update_state()
     if state == "success":
-        UPDATE_LOG.unlink(missing_ok=True)
+        updater_service.UPDATE_LOG.unlink(missing_ok=True)
     return render_template(
         "settings_update.html",
         csrf_token=session["csrf_token"],
@@ -1000,8 +777,7 @@ def settings_update():
 @app.route("/update/check")
 def update_check():
     if request.args.get("force"):
-        global _update_cache
-        _update_cache = None
+        updater_service.clear_update_cache()
     return jsonify(_check_for_update())
 
 
@@ -1015,9 +791,9 @@ def update_apply():
         return jsonify({"error": "Update already in progress"}), 409
     info = _check_for_update()
     target = info.get("latest", VERSION)
-    with open(UPDATE_LOG, "w") as log_file:
+    with open(updater_service.UPDATE_LOG, "w") as log_file:
         subprocess.Popen(
-            [sys.executable, str(UPDATER_PATH), target],
+            [sys.executable, str(updater_service.UPDATER_PATH), target],
             cwd=str(PROJECT_ROOT),
             start_new_session=True,
             stdout=log_file,
@@ -1067,20 +843,20 @@ def read_tag():
     tag_string = request.args.get("tag")
     if tag_string is None:
         if config.get("nfc_mode") == "pn532":
-            if _nfc is None:
+            if nfc_service.get_nfc() is None:
                 return jsonify({"tag_string": None, "tag_type": None, "content_id": None,
                                 "album": None, "error": "NFC not initialised"})
-            _web_read_pending.set()
+            nfc_service._web_read_pending.set()
             try:
-                tag_string = _nfc_read_queue.get(timeout=8.0)
+                tag_string = nfc_service._nfc_read_queue.get(timeout=8.0)
             except queue.Empty:
                 tag_string = None
             finally:
-                _web_read_pending.clear()
+                nfc_service._web_read_pending.clear()
                 # Drain any stale queued result
-                while not _nfc_read_queue.empty():
+                while not nfc_service._nfc_read_queue.empty():
                     try:
-                        _nfc_read_queue.get_nowait()
+                        nfc_service._nfc_read_queue.get_nowait()
                     except queue.Empty:  # pragma: no cover
                         break
         else:
@@ -1271,34 +1047,6 @@ def logs():
     return render_template("logs.html", log_output=log_output)
 
 
-def _auto_update_loop():
-    """Check once per hour and apply update automatically if auto_update=true."""
-    while True:
-        time.sleep(3600)
-        try:
-            config = _load_config()
-            if not config.get("auto_update"):
-                continue
-            info = _check_for_update()
-            if not info.get("update_available"):
-                continue
-            state, _ = _read_update_state()
-            if state == "running":
-                continue
-            target = info["latest"]
-            with open(UPDATE_LOG, "w") as log_file:
-                subprocess.Popen(
-                    [sys.executable, str(UPDATER_PATH), target],
-                    cwd=str(PROJECT_ROOT),
-                    start_new_session=True,
-                    stdout=log_file,
-                    stderr=log_file,
-                )
-            log.info("Auto-update: launched updater for v%s", target)
-        except Exception as e:
-            log.warning("Auto-update loop error: %s", e)
-
-
 def _sigterm_handler(signum, frame):
     """Wait for any in-progress NFC I2C operation to finish before exiting.
 
@@ -1306,7 +1054,7 @@ def _sigterm_handler(signum, frame):
     mid-I2C-transfer, leaving the PN532 clock-stretching and the bus hung.
     The next start then fails with 'No I2C device at address: 0x24'.
     """
-    _nfc_lock.acquire(timeout=2.0)
+    nfc_service._nfc_lock.acquire(timeout=2.0)
     sys.exit(0)
 
 
@@ -1329,7 +1077,7 @@ if __name__ == "__main__":  # pragma: no cover
         ssl_context = (args.ssl_cert, args.ssl_key)
     _configure_sonos()
     _configure_smapi()
-    _start_nfc_thread(CONFIG_PATH)
+    nfc_service._start_nfc_thread(CONFIG_PATH)
     threading.Thread(target=_auto_update_loop, daemon=True).start()
     # Suppress werkzeug "development server" warning — this is a single-user
     # Pi appliance, not a multi-tenant web service.

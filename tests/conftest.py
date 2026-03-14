@@ -1,6 +1,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock
+from core import config as core_config
 
 
 # --- iTunes API sample data ---
@@ -127,5 +128,5 @@ def temp_config(tmp_path, monkeypatch):
         "nfc_mode": "mock"
     }))
     import app
-    monkeypatch.setattr(app, "CONFIG_PATH", str(config_file))
+    monkeypatch.setattr(core_config, "CONFIG_PATH", str(config_file))
     return config_file

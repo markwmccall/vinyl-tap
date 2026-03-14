@@ -556,7 +556,8 @@ def playlist_page(playlist_id):
     info = provider.get_playlist_info(playlist_id)
     if not info:
         abort(404)
-    return render_template("playlist.html", playlist_id=playlist_id, info=info, show_now_playing=True)
+    tracks = provider.get_playlist_tracks(playlist_id)
+    return render_template("playlist.html", playlist_id=playlist_id, info=info, tracks=tracks, show_now_playing=True)
 
 
 @app.route("/track/<int:track_id>")

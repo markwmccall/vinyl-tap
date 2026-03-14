@@ -277,6 +277,43 @@ class TestSmapiSearchSongs:
         assert results[0]["name"] == "Catalog Track"
 
 
+class TestGetPlaylistTracks:
+    def test_returns_tracks_for_playlist(self):
+        p = _make_smapi_provider()
+        p._smapi.get_metadata = MagicMock(return_value=([
+            {"id": "track:111", "title": "Track One", "artist": "Artist A",
+             "album": "Album X", "item_type": "track"},
+            {"id": "track:222", "title": "Track Two", "artist": "Artist B",
+             "album": "Album Y", "item_type": "track"},
+        ], 2))
+        tracks = p.get_playlist_tracks("p.ABC123")
+        p._smapi.get_metadata.assert_called_once_with("libraryplaylist:p.ABC123", count=200)
+        assert len(tracks) == 2
+        assert tracks[0] == {"name": "Track One", "artist": "Artist A", "album": "Album X"}
+        assert tracks[1] == {"name": "Track Two", "artist": "Artist B", "album": "Album Y"}
+
+    def test_filters_non_track_items(self):
+        p = _make_smapi_provider()
+        p._smapi.get_metadata = MagicMock(return_value=([
+            {"id": "album:99", "title": "Not a track", "item_type": "collection"},
+            {"id": "track:333", "title": "Real Track", "artist": "A",
+             "album": "B", "item_type": "track"},
+        ], 2))
+        tracks = p.get_playlist_tracks("p.XYZ")
+        assert len(tracks) == 1
+        assert tracks[0]["name"] == "Real Track"
+
+    def test_returns_empty_without_smapi(self):
+        from providers.apple_music import AppleMusicProvider
+        p = AppleMusicProvider()
+        assert p.get_playlist_tracks("p.ABC") == []
+
+    def test_returns_empty_on_error(self):
+        p = _make_smapi_provider()
+        p._smapi.get_metadata = MagicMock(side_effect=Exception("network error"))
+        assert p.get_playlist_tracks("p.ABC") == []
+
+
 class TestSmapiAutoRefresh:
     def test_refreshes_token_on_auth_expired(self):
         from providers.smapi_client import AuthTokenExpired

@@ -365,8 +365,9 @@ main {
 }
 .track:hover { background: var(--surface); }
 .track-num { color: var(--text-4); width: 1.5rem; text-align: right; flex-shrink: 0; font-size: 0.9rem; }
-.track-name { font-size: 0.95rem; color: var(--text); text-decoration: none; }
+.track-name { font-size: 0.95rem; color: var(--text); text-decoration: none; flex: 1; }
 a.track-name:hover { color: var(--text); text-decoration: underline; }
+.track-artist { font-size: 0.82rem; color: var(--text-3); flex-shrink: 0; }
 
 /* Settings page */
 .settings-page h1 { font-size: 1.6rem; margin-bottom: 1.5rem; }

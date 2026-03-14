@@ -1327,16 +1327,17 @@ def _auto_update_loop():
             if state == "running":
                 continue
             target = info["latest"]
-            log_file = open(UPDATE_LOG, "w")
-            subprocess.Popen(
-                [sys.executable, str(UPDATER_PATH), target],
-                cwd=str(PROJECT_ROOT),
-                start_new_session=True,
-                stdout=log_file,
-                stderr=log_file,
-            )
-        except Exception:
-            pass
+            with open(UPDATE_LOG, "w") as log_file:
+                subprocess.Popen(
+                    [sys.executable, str(UPDATER_PATH), target],
+                    cwd=str(PROJECT_ROOT),
+                    start_new_session=True,
+                    stdout=log_file,
+                    stderr=log_file,
+                )
+            log.info("Auto-update: launched updater for v%s", target)
+        except Exception as e:
+            log.warning("Auto-update loop error: %s", e)
 
 
 def _sigterm_handler(signum, frame):

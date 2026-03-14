@@ -10,23 +10,21 @@
 ```bash
 git clone https://github.com/markwmccall/vinyl-emulator.git
 cd vinyl-emulator
-pip3 install -r requirements-dev.txt
-cp config.json.example config.json
+./scripts/dev-setup.sh
 ```
 
-Edit `config.json` and set `nfc_mode` to `mock`. In mock mode, no NFC hardware is needed — the web UI and Sonos playback work normally, and you can trigger playback directly from the browser using Play Now.
+This creates a virtualenv, installs dependencies, and generates SSL certs for `vinyl-mac.local`.
 
 ## Running locally
 
 ```bash
-python3 app.py
+./scripts/dev-service.sh start   # start (HTTPS on port 443)
+./scripts/dev-service.sh stop
+./scripts/dev-service.sh restart
+./scripts/dev-service.sh logs
 ```
 
-Opens at `http://localhost:5000`. To expose on the network:
-
-```bash
-python3 app.py --host 0.0.0.0
-```
+Opens at `https://vinyl-mac.local`. In dev mode (`INVOCATION_ID` not set), production-only features (Updates, Restart App, Reboot) show a hint instead of controls.
 
 > The web UI has no authentication — only expose it on a trusted network.
 
@@ -41,20 +39,31 @@ All tests must pass before committing.
 ## Project structure
 
 ```
-app.py              Flask web app + NFC background thread
-player.py           CLI tool: --simulate (play without a card), --read (read one tag)
-apple_music.py      iTunes Search API: search albums/songs, fetch tracks
-sonos_player.py     Sonos SOAP/UPnP: queue and play tracks via SoCo
-nfc_interface.py    NFC abstraction: MockNFC (stdin), PN532NFC (Pi)
-updater.py          Standalone update script (launched detached by app.py)
-scripts/setup.sh    One-shot Pi setup script
-scripts/install.sh  One-curl fresh install from latest GitHub release
-etc/                systemd service file
-config.json         Runtime config (not committed)
-templates/          Jinja2 HTML templates
-static/             CSS and assets
-tests/              pytest test suite
-docs/               Architecture notes, research, backlog
+app.py                  Flask web app + NFC background thread
+core/
+  nfc_interface.py      NFC abstraction: MockNFC (stdin), PN532NFC (hardware)
+  sonos_player.py       Sonos UPnP/SOAP: queue and play tracks via SoCo
+  updater.py            Standalone update script (launched detached by app.py)
+providers/
+  apple_music.py        Apple Music: iTunes Search API + SMAPI authenticated search
+  smapi_client.py       Sonos SMAPI SOAP client (shared across music providers)
+  sonos_api.py          Sonos Control API OAuth client
+data/
+  tags.json             NFC tag history (runtime, not committed)
+scripts/
+  dev-setup.sh          One-time Mac dev environment setup
+  dev-service.sh        Mac dev server manager (start/stop/restart/logs)
+  setup.sh              One-shot device setup script
+  install.sh            One-curl fresh install from latest GitHub release
+  release.sh            Cut a release (bumps VERSION, tags, pushes)
+  service.sh            Manage vinyl-web systemd service on device
+etc/                    systemd service file
+config.json             Runtime config (not committed)
+templates/              Jinja2 HTML templates
+static/                 CSS and assets
+tests/                  pytest test suite
+docs/                   Architecture notes, research, backlog
+poc/                    Proof-of-concept scripts (not used at runtime)
 ```
 
 ## Configuration
@@ -65,8 +74,12 @@ docs/               Architecture notes, research, backlog
 |-----|-------------|
 | `speaker_ip` | Sonos speaker IP |
 | `sn` | Apple Music service number (assigned by Sonos) |
-| `nfc_mode` | `mock` for local dev, `pn532` on Raspberry Pi |
-| `auto_update` | `true` to enable daily automatic updates |
+| `nfc_mode` | `mock` for local dev, `pn532` with hardware |
+| `auto_update` | `true` to enable hourly automatic updates |
+
+## Dev vs production
+
+The app detects production by checking for `INVOCATION_ID` in the environment (set automatically by systemd). Features that only make sense in production (Updates, Auto-Update, Restart App, Reboot) are hidden in dev with a hint message.
 
 ## Tag format
 
@@ -74,10 +87,11 @@ docs/               Architecture notes, research, backlog
 |------------|-----------|
 | `apple:1440903625` | Full album (collection ID from iTunes) |
 | `apple:track:1440904001` | Single song (track ID from iTunes) |
+| `apple:playlist:p.XYZ` | Personal playlist |
 
 Tags are written as NDEF text records. NTAG213 cards (144 bytes) are more than large enough.
 
-## Service management (on Pi)
+## Service management (on device)
 
 ```bash
 sudo systemctl status vinyl-web   # check if running
@@ -104,4 +118,3 @@ This updates `VERSION`, commits, pushes, and creates the tag. GitHub Actions the
 | **Adafruit CircuitPython PN532** | [github.com/adafruit/Adafruit_CircuitPython_PN532](https://github.com/adafruit/Adafruit_CircuitPython_PN532) |
 | **NDEF / NFC Data Exchange Format** | [ndeflib.readthedocs.io](https://ndeflib.readthedocs.io) |
 | **Flask** | [flask.palletsprojects.com](https://flask.palletsprojects.com) |
-| **Raspberry Pi I2C** | [raspberrypi.com/documentation/computers/raspberry-pi.html](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#i2c) |

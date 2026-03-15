@@ -1082,7 +1082,7 @@ class TestLogs:
         with patch("subprocess.run", side_effect=FileNotFoundError):
             resp = client.get("/logs")
         assert resp.status_code == 200
-        assert b"only available in production" in resp.data
+        assert b"Could not fetch logs" in resp.data
 
 
 class TestTransport:

@@ -74,7 +74,7 @@ def _configure_sonos():
     try:
         config = _load_config()
     except Exception as e:
-        log.warning("_configure_sonos: failed to load config: %s", e)
+        log.warning("_configure_sonos: failed to load config: %s", e, exc_info=True)
         return
     sonos_cfg = config.get("services", {}).get("sonos", {})
     access_token = sonos_cfg.get("access_token")
@@ -111,7 +111,7 @@ def _configure_smapi():
     try:
         config = _load_config()
     except Exception as e:
-        log.warning("_configure_smapi: failed to load config: %s", e)
+        log.warning("_configure_smapi: failed to load config: %s", e, exc_info=True)
         return
     apple_cfg = config.get("services", {}).get("apple", {})
     token = apple_cfg.get("smapi_token")
@@ -651,7 +651,7 @@ def sonos_callback():
         _configure_sonos()
         log.info("Sonos account connected (household=%s)", household_id)
     except Exception as e:
-        log.error("Sonos OAuth callback failed: %s", e)
+        log.error("Sonos OAuth callback failed: %s", e, exc_info=True)
         return redirect(url_for("settings_music") + "?error=callback_failed")
 
     return redirect(url_for("settings_music") + "?connected=1")
@@ -684,7 +684,7 @@ def sonos_disconnect():
         provider._sonos_household_id = None
         provider._on_sonos_token_refresh = None
     except Exception as e:
-        log.warning("Failed to disconnect Sonos: %s", e)
+        log.warning("Failed to disconnect Sonos: %s", e, exc_info=True)
     return redirect(url_for("settings_music") + "?disconnected=1")
 
 
@@ -721,7 +721,7 @@ def settings_reboot():
         try:
             subprocess.Popen(["sudo", "reboot"])
         except OSError as e:
-            log.error("Failed to launch reboot: %s", e)
+            log.error("Failed to launch reboot: %s", e, exc_info=True)
             abort(500)
         return redirect(url_for("settings_hardware", rebooting=1))
     return render_template("settings_reboot.html", rebooting=False,
@@ -739,7 +739,7 @@ def settings_restart():
     try:
         subprocess.Popen(["sudo", "systemctl", "restart", "vinyl-web"])
     except OSError as e:
-        log.error("Failed to launch restart: %s", e)
+        log.error("Failed to launch restart: %s", e, exc_info=True)
         abort(500)
     return redirect(url_for("settings_hardware", restarting=1))
 
@@ -1060,8 +1060,9 @@ def logs():
             capture_output=True, text=True, timeout=5,
         )
         log_output = result.stdout or "(no log output)"
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        log_output = None
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        log.warning("Could not fetch logs: %s", e)
+        log_output = f"(Could not fetch logs: {e})"
     return render_template("logs.html", log_output=log_output)
 
 

@@ -22,7 +22,7 @@
     <p class="hint">Connected &mdash; household <code>{{ sonos_household_id[:16] }}…</code></p>
     <form method="POST" action="/sonos/disconnect" style="margin-top: 0.75rem;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn-secondary">Disconnect</button>
+      <button type="submit" class="save-btn">Disconnect</button>
     </form>
     {% else %}
     <p class="hint">Connect your Sonos account to enable searching across all linked music services (Apple Music, Amazon Music, Spotify, etc.).</p>

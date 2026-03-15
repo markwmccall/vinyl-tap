@@ -105,6 +105,6 @@ def _auto_update_loop():
                     stdout=log_file,
                     stderr=log_file,
                 )
-            log.info("Auto-update: launched updater for v%s", target)
+            log.info("Auto-update: launched updater %s → v%s", VERSION, target)
         except Exception as e:
             log.warning("Auto-update loop error: %s", e)

@@ -1,9 +1,10 @@
 import logging
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
 
-def _parse_ndef_text(data):
+def _parse_ndef_text(data) -> Optional[str]:
     """Extract text string from NDEF TLV bytes. Returns string or None if blank/unrecognised."""
     if not data or data[0] != 0x03:
         return None

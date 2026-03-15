@@ -244,6 +244,7 @@ def _get_hardware_stats():
 
 
 def _record_tag(tag_string, tag_type, name, artist, artwork_url, album_id=None, track_id=None, playlist_id=None):
+    parse_tag_data(tag_string)  # raises ValueError if structurally invalid
     tags = _load_tags()
     tags = [t for t in tags if t["tag_string"] != tag_string]
     tags.insert(0, {
@@ -292,6 +293,8 @@ def _format_existing_tag(tag_string):
             tracks = provider.get_album_tracks(tag["id"])
             if tracks:
                 return f"{tracks[0]['album']} by {tracks[0]['artist']}"
+    except KeyError as e:
+        log.debug("Unknown provider for tag %s: %s", tag_string, e)
     except Exception as e:
         log.debug("Could not resolve display name for %s: %s", tag_string, e)
     return tag_string

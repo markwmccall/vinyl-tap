@@ -130,7 +130,7 @@ def _start_nfc_thread(config_path):
     try:
         _nfc = PN532NFC()
     except Exception as e:
-        log.error("Failed to initialise PN532: %s", e)
+        log.error("Failed to initialise PN532: %s (check SPI wiring, GPIO4 chip-select, and RSTPDN on D20)", e)
         return
     t = threading.Thread(target=_nfc_loop, args=(config_path,), daemon=True)
     t.start()

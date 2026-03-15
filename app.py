@@ -10,15 +10,13 @@ import signal
 import subprocess
 import sys
 import threading
-import time
 import urllib.request
 import urllib.error
 from datetime import datetime
 from pathlib import Path
 
-import psutil
-
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
+from core.hardware_stats import get_hardware_stats
 
 import soco
 from core.nfc_interface import MockNFC, PN532NFC, parse_tag_data
@@ -188,109 +186,6 @@ def _configure_smapi():
     log.info("Apple Music SMAPI search enabled (household=%s)", hhid)
 
 
-def _fmt_bytes(n):
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}"
-        n /= 1024
-    return f"{n:.1f} PB"  # pragma: no cover
-
-
-def _safe(fn):
-    """Call fn(), returning None if any exception is raised."""
-    try:
-        return fn()
-    except Exception:
-        return None
-
-
-def _read_os_release():
-    with open("/etc/os-release") as f:
-        pairs = {}
-        for line in f:
-            line = line.strip()
-            if "=" in line:
-                k, v = line.split("=", 1)
-                pairs[k] = v.strip('"')
-    return pairs.get("PRETTY_NAME")
-
-
-def _read_uptime():
-    uptime_secs = int(time.time() - psutil.boot_time())
-    d, rem = divmod(uptime_secs, 86400)
-    h, rem = divmod(rem, 3600)
-    m = rem // 60
-    parts = []
-    if d:
-        parts.append(f"{d}d")
-    if h:
-        parts.append(f"{h}h")
-    parts.append(f"{m}m")
-    return " ".join(parts)
-
-
-def _read_cpu_model():
-    with open("/proc/cpuinfo") as f:
-        for line in f:
-            if line.startswith("Model"):
-                return line.split(":", 1)[1].strip()
-    return None
-
-
-def _read_cpu_temp():
-    with open("/sys/class/thermal/thermal_zone0/temp") as f:
-        return round(int(f.read().strip()) / 1000, 1)
-
-
-def _read_throttle():
-    """Return (throttle_ok, flags) tuple from vcgencmd, or raise on failure."""
-    result = subprocess.run(
-        ["vcgencmd", "get_throttled"],
-        capture_output=True, text=True, timeout=2,
-    )
-    hex_val = result.stdout.strip().split("=")[-1]
-    throttled = int(hex_val, 16)
-    flags = []
-    if throttled & 0x1:     flags.append("Under-voltage detected")
-    if throttled & 0x2:     flags.append("Arm frequency capped")
-    if throttled & 0x4:     flags.append("Currently throttled")
-    if throttled & 0x8:     flags.append("Soft temperature limit active")
-    if throttled & 0x10000: flags.append("Under-voltage has occurred")
-    if throttled & 0x20000: flags.append("Arm frequency has been capped")
-    if throttled & 0x40000: flags.append("Throttling has occurred")
-    if throttled & 0x80000: flags.append("Soft temperature limit has occurred")
-    return throttled == 0, flags
-
-
-def _get_hardware_stats():
-    mem = _safe(psutil.virtual_memory)
-    swap = _safe(psutil.swap_memory)
-    disk = _safe(lambda: psutil.disk_usage("/"))
-    freq = _safe(psutil.cpu_freq)
-    throttle = _safe(_read_throttle)
-    return {
-        "hostname":       _safe(lambda: os.uname().nodename),
-        "os":             _safe(_read_os_release),
-        "kernel":         _safe(lambda: os.uname().release),
-        "uptime":         _safe(_read_uptime),
-        "cpu_model":      _safe(_read_cpu_model),
-        "cpu_cores":      _safe(lambda: psutil.cpu_count(logical=False) or psutil.cpu_count()),
-        "cpu_percent":    _safe(lambda: psutil.cpu_percent(interval=0.1)),
-        "cpu_freq_mhz":   round(freq.current) if freq else None,
-        "cpu_temp_c":     _safe(_read_cpu_temp),
-        "ram_used":       _fmt_bytes(mem.used) if mem else None,
-        "ram_total":      _fmt_bytes(mem.total) if mem else None,
-        "ram_percent":    mem.percent if mem else None,
-        "swap_used":      _fmt_bytes(swap.used) if swap else None,
-        "swap_total":     _fmt_bytes(swap.total) if swap else None,
-        "disk_used":      _fmt_bytes(disk.used) if disk else None,
-        "disk_free":      _fmt_bytes(disk.free) if disk else None,
-        "disk_total":     _fmt_bytes(disk.total) if disk else None,
-        "disk_percent":   disk.percent if disk else None,
-        "nfc_connected":  nfc_service.get_nfc() is not None,
-        "throttle_ok":    throttle[0] if throttle else None,
-        "throttle_flags": throttle[1] if throttle else None,
-    }
 
 
 
@@ -516,6 +411,22 @@ def write_url_tag():
     return jsonify({"status": "ok", "written": url})
 
 
+def _dispatch_play(provider, tag_type, tag_id, config):
+    """Resolve tracks/playlist and start playback. Returns a JSON error response or None on success."""
+    if tag_type == "playlist":
+        info = provider.get_playlist_info(tag_id) or {}
+        play_playlist(config["speaker_ip"], tag_id, info.get("title", ""),
+                      provider, config["sn"],
+                      speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+    else:
+        tracks = provider.get_track(tag_id) if tag_type == "track" else provider.get_album_tracks(tag_id)
+        if not tracks:
+            return jsonify({"error": "not found"}), 404
+        play_album(config["speaker_ip"], tracks, provider, config["sn"],
+                   speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+    return None
+
+
 @app.route("/play", methods=["POST"])
 def play():
     data = request.get_json()
@@ -523,21 +434,14 @@ def play():
         return jsonify({"error": "album_id, track_id, or playlist_id required"}), 400
     config = _load_config()
     provider = get_provider("apple")
-    if "playlist_id" in data:
-        info = provider.get_playlist_info(data["playlist_id"]) or {}
-        play_playlist(config["speaker_ip"], data["playlist_id"], info.get("title", ""),
-                      provider, config["sn"],
-                      speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+    if "track_id" in data:
+        tag_type, tag_id = "track", data["track_id"]
+    elif "playlist_id" in data:
+        tag_type, tag_id = "playlist", data["playlist_id"]
     else:
-        if "track_id" in data:
-            tracks = provider.get_track(data["track_id"])
-        else:
-            tracks = provider.get_album_tracks(data["album_id"])
-        if not tracks:
-            return jsonify({"error": "not found"}), 404
-        play_album(config["speaker_ip"], tracks, provider, config["sn"],
-                   speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
-    return jsonify({"status": "ok"})
+        tag_type, tag_id = "album", data["album_id"]
+    err = _dispatch_play(provider, tag_type, tag_id, config)
+    return err or jsonify({"status": "ok"})
 
 
 @app.route("/settings")
@@ -657,12 +561,11 @@ def sonos_callback():
         if not household_id:
             return redirect(url_for("settings_music") + "?error=no_households")
 
-        cfg = _load_config()
-        cfg.setdefault("services", {}).setdefault("sonos", {})
-        cfg["services"]["sonos"]["access_token"] = access_token
-        cfg["services"]["sonos"]["refresh_token"] = refresh_token
-        cfg["services"]["sonos"]["household_id"] = household_id
-        _save_config(cfg)
+        config.setdefault("services", {}).setdefault("sonos", {})
+        config["services"]["sonos"]["access_token"] = access_token
+        config["services"]["sonos"]["refresh_token"] = refresh_token
+        config["services"]["sonos"]["household_id"] = household_id
+        _save_config(config)
 
         _configure_sonos()
         log.info("Sonos account connected (household=%s)", household_id)
@@ -754,7 +657,7 @@ def settings_hardware():
     restarting = request.args.get("restarting") == "1"
     rebooting = request.args.get("rebooting") == "1"
     nfc_saved = request.args.get("nfc_saved") == "1"
-    hw = _get_hardware_stats()
+    hw = get_hardware_stats(nfc_connected=nfc_service.get_nfc() is not None)
     config = _load_config()
     return render_template("settings_hardware.html", csrf_token=session["csrf_token"],
                            restarting=restarting, rebooting=rebooting, hw=hw,
@@ -1005,21 +908,8 @@ def play_tag():
         provider = get_provider(tag["service"])
     except KeyError as e:
         return jsonify({"error": str(e)}), 400
-    if tag["type"] == "playlist":
-        info = provider.get_playlist_info(tag["id"]) or {}
-        play_playlist(config["speaker_ip"], tag["id"], info.get("title", ""),
-                      provider, config["sn"],
-                      speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
-    else:
-        if tag["type"] == "track":
-            tracks = provider.get_track(tag["id"])
-        else:
-            tracks = provider.get_album_tracks(tag["id"])
-        if not tracks:
-            return jsonify({"error": "not found"}), 404
-        play_album(config["speaker_ip"], tracks, provider, config["sn"],
-                   speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
-    return jsonify({"status": "ok"})
+    err = _dispatch_play(provider, tag["type"], tag["id"], config)
+    return err or jsonify({"status": "ok"})
 
 
 @app.route("/collection")

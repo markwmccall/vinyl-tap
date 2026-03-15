@@ -97,7 +97,7 @@ def _configure_sonos():
             _save_config(cfg)
             log.info("Persisted refreshed Sonos token to config")
         except Exception as e:
-            log.warning("Failed to persist Sonos token: %s", e)
+            log.error("Failed to persist Sonos token: %s", e, exc_info=True)
 
     provider = get_provider("apple")
     provider.configure_sonos(
@@ -130,7 +130,7 @@ def _configure_smapi():
             _save_config(cfg)
             log.info("Persisted refreshed SMAPI token to config")
         except Exception as e:
-            log.warning("Failed to persist SMAPI token: %s", e)
+            log.error("Failed to persist SMAPI token: %s", e, exc_info=True)
 
     provider = get_provider("apple")
     provider.configure_smapi(token, key, hhid, on_token_refresh=_on_token_refresh)
@@ -572,7 +572,11 @@ def settings_music_credentials():
 
 @app.route("/sonos/auth")
 def sonos_auth():
-    config = _load_config()
+    try:
+        config = _load_config()
+    except Exception as e:
+        log.error("sonos_auth: failed to load config: %s", e, exc_info=True)
+        return jsonify({"error": "Configuration error"}), 500
     sonos_cfg = config.get("services", {}).get("sonos", {})
     client_key = sonos_cfg.get("client_key")
     client_secret = sonos_cfg.get("client_secret")
@@ -580,8 +584,12 @@ def sonos_auth():
     if not (client_key and client_secret and redirect_uri):
         return jsonify({"error": "Sonos client credentials not configured"}), 400
 
-    from providers.sonos_api import SonosControlClient
-    client = SonosControlClient(client_key, client_secret)
+    try:
+        from providers.sonos_api import SonosControlClient
+        client = SonosControlClient(client_key, client_secret)
+    except Exception as e:
+        log.error("sonos_auth: failed to create Sonos client: %s", e, exc_info=True)
+        return jsonify({"error": "Failed to initialise Sonos client"}), 500
     state = secrets.token_hex(16)
     session["sonos_oauth_state"] = state
     if request.args.get("show_code"):
@@ -679,6 +687,8 @@ def sonos_disconnect():
 
 @app.route("/settings/nfc", methods=["GET", "POST"])
 def settings_nfc():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
     if request.method == "POST":
         config = _load_config()
         token = request.form.get("csrf_token", "")

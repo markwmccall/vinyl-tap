@@ -126,11 +126,15 @@ def get_volume(speaker_ip):
 
 def set_volume(speaker_ip, value, speaker_name=None, config_path=None):
     try:
-        soco.SoCo(speaker_ip).volume = int(value)
+        vol_int = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid volume value: {value!r}")
+    try:
+        soco.SoCo(speaker_ip).volume = vol_int
     except Exception:
         if speaker_name and config_path:
             new_ip = _rediscover_speaker(speaker_name, config_path)
-            soco.SoCo(new_ip).volume = int(value)
+            soco.SoCo(new_ip).volume = vol_int
         else:
             raise
 

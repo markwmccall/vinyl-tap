@@ -59,19 +59,21 @@ def parse_tag_data(tag_string):
     Unknown services parse successfully; provider lookup raises KeyError later.
     """
     if not tag_string or ":" not in tag_string:
-        raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+        raise ValueError(f"Tag string has no colon separator: {tag_string!r}")
     service, _, rest = tag_string.partition(":")
-    if not service or not rest:
-        raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+    if not service:
+        raise ValueError(f"Empty service name in tag string: {tag_string!r}")
+    if not rest:
+        raise ValueError(f"Empty content after service name in tag string: {tag_string!r}")
     if rest.startswith("track:"):
         track_id = rest[len("track:"):]
         if not track_id:
-            raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+            raise ValueError(f"Empty track_id in tag string: {tag_string!r}")
         return {"service": service, "type": "track", "id": track_id}
     if rest.startswith("playlist:"):
         playlist_id = rest[len("playlist:"):]
         if not playlist_id:
-            raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+            raise ValueError(f"Empty playlist_id in tag string: {tag_string!r}")
         return {"service": service, "type": "playlist", "id": playlist_id}
     return {"service": service, "type": "album", "id": rest}
 

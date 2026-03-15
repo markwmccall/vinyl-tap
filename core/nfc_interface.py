@@ -132,7 +132,11 @@ class PN532NFC:
             if b is None:
                 break
             data.extend(b)
-        return _parse_ndef_text(bytes(data))
+        try:
+            return _parse_ndef_text(bytes(data))
+        except (IndexError, ValueError) as e:
+            log.warning("Corrupted NDEF data on tag: %s", e)
+            return None
 
     def _write_block(self, block_num, data):
         """Write one block, raising IOError on failure or missing tag."""

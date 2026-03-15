@@ -65,7 +65,7 @@ def _get_household_id_upnp(speaker_ip: str) -> str:
         m = re.search(r"<CurrentHouseholdID>([^<]+)</CurrentHouseholdID>", body)
         return m.group(1) if m else ""
     except Exception as e:
-        log.warning("Could not get household ID from speaker: %s", e)
+        log.warning("Could not get household ID from speaker: %s", e, exc_info=True)
         return ""
 
 
@@ -856,11 +856,12 @@ def read_tag():
     tag_string = request.args.get("tag")
     if tag_string is None:
         if config.get("nfc_mode") == "pn532":
-            if nfc_service.get_nfc() is None:
-                return jsonify({"tag_string": None, "tag_type": None, "content_id": None,
-                                "album": None, "error": "NFC not initialised"})
             nfc_service._web_read_pending.set()
             try:
+                if nfc_service.get_nfc() is None:
+                    nfc_service._web_read_pending.clear()
+                    return jsonify({"tag_string": None, "tag_type": None, "content_id": None,
+                                    "album": None, "error": "NFC not initialised"})
                 tag_string = nfc_service._nfc_read_queue.get(timeout=8.0)
             except queue.Empty:
                 tag_string = None
@@ -919,7 +920,11 @@ def detect_sn():
     speaker_ip = request.args.get("speaker_ip") or _load_config().get("speaker_ip", "")
     if not speaker_ip:
         return jsonify({"error": "no speaker configured"}), 400
-    sn = get_provider("apple").detect_sn(soco.SoCo(speaker_ip))
+    try:
+        sn = get_provider("apple").detect_sn(soco.SoCo(speaker_ip))
+    except Exception as e:
+        log.warning("detect_sn failed for %s: %s", speaker_ip, e)
+        return jsonify({"error": "Failed to detect serial number"}), 500
     if sn is None:
         return jsonify({"error": "No Apple Music favorites found in Sonos - enter 3 or 5 manually"}), 404
     return jsonify({"sn": sn})

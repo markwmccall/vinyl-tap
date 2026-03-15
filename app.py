@@ -451,8 +451,8 @@ def write_tag():
 
     try:
         _do_record_tag(tag_data, data)
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("Failed to record tag metadata for %s: %s", tag_data, e)
     return jsonify({"status": "ok", "written": tag_data})
 
 

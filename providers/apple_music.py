@@ -145,7 +145,7 @@ class AppleMusicProvider(MusicProvider):
                 if item.get("item_type") == "playlist"
             ]
         except Exception as e:
-            log.warning("list_playlists failed: %s", e)
+            log.error("list_playlists failed: %s", e, exc_info=True)
             return []
 
     def search_playlists(self, query: str) -> List[Dict]:
@@ -206,8 +206,11 @@ class AppleMusicProvider(MusicProvider):
         except urllib.error.URLError as e:
             log.warning("iTunes API request failed (%s): %s", url, e)
             return None
-        except (json.JSONDecodeError, KeyError) as e:
-            log.warning("iTunes API response malformed (%s): %s", url, e)
+        except json.JSONDecodeError as e:
+            log.warning("iTunes API response not valid JSON (%s): %s", url, e)
+            return None
+        except KeyError as e:
+            log.warning("iTunes API response missing expected key (%s): %s", url, e)
             return None
 
     def _itunes_search_albums(self, query: str) -> List[Dict]:

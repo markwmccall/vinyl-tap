@@ -1,6 +1,9 @@
 import json
+import logging
 import re
 import soco
+
+log = logging.getLogger(__name__)
 
 
 def get_speakers():
@@ -18,12 +21,14 @@ def _rediscover_speaker(speaker_name, config_path):
     devices = soco.discover() or set()
     for d in devices:
         if d.player_name == speaker_name:
+            log.info("Rediscovered speaker '%s' at new IP %s", speaker_name, d.ip_address)
             with open(config_path) as f:
                 config = json.load(f)
             config["speaker_ip"] = d.ip_address
             with open(config_path, "w") as f:
                 json.dump(config, f, indent=2)
             return d.ip_address
+    log.error("Failed to rediscover speaker '%s' on network", speaker_name)
     raise RuntimeError(f"Speaker '{speaker_name}' not found on network")
 
 
@@ -52,7 +57,8 @@ def get_now_playing(speaker_ip):
             "track_id": track_id,
             "paused": state == "PAUSED_PLAYBACK",
         }
-    except Exception:
+    except Exception as e:
+        log.debug("Failed to get now playing from %s: %s", speaker_ip, e)
         return None
 
 

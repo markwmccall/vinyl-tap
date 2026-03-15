@@ -35,6 +35,21 @@ IS_PRODUCTION = "INVOCATION_ID" in os.environ
 
 log = logging.getLogger(__name__)
 
+_CONFIG_ERROR_PHRASES = (
+    "Config file not found",
+    "Config file is not valid JSON",
+    "Missing required config fields",
+)
+
+
+@app.errorhandler(RuntimeError)
+def handle_config_error(e):
+    msg = str(e)
+    if any(phrase in msg for phrase in _CONFIG_ERROR_PHRASES):
+        log.warning("Config error in request %s: %s", request.path, msg)
+        return jsonify({"error": msg}), 503
+    raise e
+
 
 @app.context_processor
 def _inject_version():

@@ -1971,3 +1971,38 @@ class TestUpdateAuto:
         assert resp.status_code == 302
         config = json.loads(temp_config.read_text())
         assert config["auto_update"] is False
+
+
+class TestConfigErrorHandler:
+    """Flask error handler converts _load_config() RuntimeErrors to 503 JSON responses."""
+
+    def test_missing_config_file_returns_503(self, client, monkeypatch):
+        monkeypatch.setattr(core_config, "CONFIG_PATH", "/nonexistent/config.json")
+        resp = client.get("/settings")
+        assert resp.status_code == 503
+        data = resp.get_json()
+        assert "Config file not found" in data["error"]
+
+    def test_invalid_json_config_returns_503(self, client, tmp_path, monkeypatch):
+        bad_config = tmp_path / "config.json"
+        bad_config.write_text("not valid json{{{")
+        monkeypatch.setattr(core_config, "CONFIG_PATH", str(bad_config))
+        resp = client.get("/settings")
+        assert resp.status_code == 503
+        data = resp.get_json()
+        assert "Config file is not valid JSON" in data["error"]
+
+    def test_missing_required_fields_returns_503(self, client, tmp_path, monkeypatch):
+        bad_config = tmp_path / "config.json"
+        bad_config.write_text(json.dumps({"speaker_ip": "10.0.0.1"}))
+        monkeypatch.setattr(core_config, "CONFIG_PATH", str(bad_config))
+        resp = client.get("/settings")
+        assert resp.status_code == 503
+        data = resp.get_json()
+        assert "Missing required config fields" in data["error"]
+
+    def test_json_route_also_returns_503(self, client, monkeypatch):
+        monkeypatch.setattr(core_config, "CONFIG_PATH", "/nonexistent/config.json")
+        resp = client.get("/now-playing")
+        assert resp.status_code == 503
+        assert resp.get_json()["error"]

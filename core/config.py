@@ -11,8 +11,16 @@ VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else "0.0.
 
 
 def _load_config():
-    with open(CONFIG_PATH) as f:
-        config = json.load(f)
+    try:
+        with open(CONFIG_PATH) as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"Config file not found: {CONFIG_PATH}. "
+            "Visit /settings to configure the device."
+        )
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Config file is not valid JSON: {e}")
     # In-memory migration: flat "sn" → services.apple.sn (and vice versa)
     if "sn" in config and "services" not in config:
         config.setdefault("services", {}).setdefault("apple", {})

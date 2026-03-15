@@ -1,9 +1,10 @@
 import logging
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
 
-def _parse_ndef_text(data):
+def _parse_ndef_text(data) -> Optional[str]:
     """Extract text string from NDEF TLV bytes. Returns string or None if blank/unrecognised."""
     if not data or data[0] != 0x03:
         return None
@@ -59,19 +60,21 @@ def parse_tag_data(tag_string):
     Unknown services parse successfully; provider lookup raises KeyError later.
     """
     if not tag_string or ":" not in tag_string:
-        raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+        raise ValueError(f"Tag string has no colon separator: {tag_string!r}")
     service, _, rest = tag_string.partition(":")
-    if not service or not rest:
-        raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+    if not service:
+        raise ValueError(f"Empty service name in tag string: {tag_string!r}")
+    if not rest:
+        raise ValueError(f"Empty content after service name in tag string: {tag_string!r}")
     if rest.startswith("track:"):
         track_id = rest[len("track:"):]
         if not track_id:
-            raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+            raise ValueError(f"Empty track_id in tag string: {tag_string!r}")
         return {"service": service, "type": "track", "id": track_id}
     if rest.startswith("playlist:"):
         playlist_id = rest[len("playlist:"):]
         if not playlist_id:
-            raise ValueError(f"Unrecognised tag format: {tag_string!r}")
+            raise ValueError(f"Empty playlist_id in tag string: {tag_string!r}")
         return {"service": service, "type": "playlist", "id": playlist_id}
     return {"service": service, "type": "album", "id": rest}
 
@@ -85,12 +88,12 @@ class MockNFC:
 
     def write_tag(self, data):
         """Print what would be written to the physical tag."""
-        log.info(f"[MockNFC] Would write: {data}")
+        log.info("[MockNFC] Would write: %s", data)
         return True
 
     def write_url_tag(self, url):
         """Print what URL would be written to the physical tag."""
-        log.info(f"[MockNFC] Would write URL: {url}")
+        log.info("[MockNFC] Would write URL: %s", url)
         return True
 
 
@@ -129,7 +132,11 @@ class PN532NFC:
             if b is None:
                 break
             data.extend(b)
-        return _parse_ndef_text(bytes(data))
+        try:
+            return _parse_ndef_text(bytes(data))
+        except (IndexError, ValueError) as e:
+            log.warning("Corrupted NDEF data on tag: %s", e)
+            return None
 
     def _write_block(self, block_num, data):
         """Write one block, raising IOError on failure or missing tag."""

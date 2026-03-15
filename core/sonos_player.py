@@ -1,6 +1,9 @@
 import json
+import logging
 import re
 import soco
+
+log = logging.getLogger(__name__)
 
 
 def get_speakers():
@@ -18,13 +21,15 @@ def _rediscover_speaker(speaker_name, config_path):
     devices = soco.discover() or set()
     for d in devices:
         if d.player_name == speaker_name:
+            log.info("Rediscovered speaker '%s' at new IP %s", speaker_name, d.ip_address)
             with open(config_path) as f:
                 config = json.load(f)
             config["speaker_ip"] = d.ip_address
             with open(config_path, "w") as f:
                 json.dump(config, f, indent=2)
             return d.ip_address
-    raise Exception(f"Speaker '{speaker_name}' not found on network")
+    log.error("Failed to rediscover speaker '%s' on network", speaker_name)
+    raise RuntimeError(f"Speaker '{speaker_name}' not found on network")
 
 
 def get_now_playing(speaker_ip):
@@ -52,7 +57,8 @@ def get_now_playing(speaker_ip):
             "track_id": track_id,
             "paused": state == "PAUSED_PLAYBACK",
         }
-    except Exception:
+    except Exception as e:
+        log.debug("Failed to get now playing from %s: %s", speaker_ip, e)
         return None
 
 
@@ -61,6 +67,7 @@ def pause(speaker_ip, speaker_name=None, config_path=None):
         soco.SoCo(speaker_ip).pause()
     except Exception:
         if speaker_name and config_path:
+            log.info("pause: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
             soco.SoCo(new_ip).pause()
         else:
@@ -72,6 +79,7 @@ def resume(speaker_ip, speaker_name=None, config_path=None):
         soco.SoCo(speaker_ip).play()
     except Exception:
         if speaker_name and config_path:
+            log.info("resume: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
             soco.SoCo(new_ip).play()
         else:
@@ -83,6 +91,7 @@ def stop(speaker_ip, speaker_name=None, config_path=None):
         soco.SoCo(speaker_ip).stop()
     except Exception:
         if speaker_name and config_path:
+            log.info("stop: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
             soco.SoCo(new_ip).stop()
         else:
@@ -94,6 +103,7 @@ def next_track(speaker_ip, speaker_name=None, config_path=None):
         soco.SoCo(speaker_ip).next()
     except Exception:
         if speaker_name and config_path:
+            log.info("next_track: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
             soco.SoCo(new_ip).next()
         else:
@@ -105,6 +115,7 @@ def prev_track(speaker_ip, speaker_name=None, config_path=None):
         soco.SoCo(speaker_ip).previous()
     except Exception:
         if speaker_name and config_path:
+            log.info("prev_track: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
             soco.SoCo(new_ip).previous()
         else:
@@ -120,11 +131,16 @@ def get_volume(speaker_ip):
 
 def set_volume(speaker_ip, value, speaker_name=None, config_path=None):
     try:
-        soco.SoCo(speaker_ip).volume = int(value)
+        vol_int = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid volume value: {value!r}")
+    try:
+        soco.SoCo(speaker_ip).volume = vol_int
     except Exception:
         if speaker_name and config_path:
+            log.info("set_volume: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
-            soco.SoCo(new_ip).volume = int(value)
+            soco.SoCo(new_ip).volume = vol_int
         else:
             raise
 
@@ -167,6 +183,7 @@ def play_playlist(speaker_ip, playlist_id, title, provider, sn, speaker_name=Non
         _do_play_playlist(soco.SoCo(speaker_ip), playlist_id, title, provider, sn)
     except Exception:
         if speaker_name and config_path:
+            log.info("play_playlist: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
             _do_play_playlist(soco.SoCo(new_ip), playlist_id, title, provider, sn)
         else:
@@ -180,6 +197,7 @@ def play_album(speaker_ip, track_dicts, provider, sn, speaker_name=None, config_
         _do_play_album(soco.SoCo(speaker_ip), track_dicts, provider, sn)
     except Exception:
         if speaker_name and config_path:
+            log.info("play_album: retrying after rediscovery of '%s'", speaker_name)
             new_ip = _rediscover_speaker(speaker_name, config_path)
             _do_play_album(soco.SoCo(new_ip), track_dicts, provider, sn)
         else:

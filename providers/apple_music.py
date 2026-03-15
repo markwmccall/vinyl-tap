@@ -145,7 +145,7 @@ class AppleMusicProvider(MusicProvider):
                 if item.get("item_type") == "playlist"
             ]
         except Exception as e:
-            log.warning("list_playlists failed: %s", e)
+            log.error("list_playlists failed: %s", e, exc_info=True)
             return []
 
     def search_playlists(self, query: str) -> List[Dict]:
@@ -198,11 +198,27 @@ class AppleMusicProvider(MusicProvider):
 
     # --- iTunes API implementations ---
 
+    def _itunes_fetch(self, url: str) -> Optional[Dict]:
+        """Fetch and parse JSON from iTunes API. Returns None on network/parse errors."""
+        try:
+            with urllib.request.urlopen(url, timeout=10) as response:
+                return json.loads(response.read())
+        except urllib.error.URLError as e:
+            log.warning("iTunes API request failed (%s): %s", url, e)
+            return None
+        except json.JSONDecodeError as e:
+            log.warning("iTunes API response not valid JSON (%s): %s", url, e)
+            return None
+        except KeyError as e:
+            log.warning("iTunes API response missing expected key (%s): %s", url, e)
+            return None
+
     def _itunes_search_albums(self, query: str) -> List[Dict]:
         encoded = urllib.parse.quote(query)
         url = f"https://itunes.apple.com/search?term={encoded}&entity=album"
-        with urllib.request.urlopen(url, timeout=10) as response:
-            data = json.loads(response.read())
+        data = self._itunes_fetch(url)
+        if data is None:
+            return []
         return [
             {
                 "id": r["collectionId"],
@@ -210,14 +226,15 @@ class AppleMusicProvider(MusicProvider):
                 "artist": r["artistName"],
                 "artwork_url": _upgrade_artwork_url(r.get("artworkUrl100", "")),
             }
-            for r in data["results"]
+            for r in data.get("results", [])
         ]
 
     def _itunes_search_songs(self, query: str) -> List[Dict]:
         encoded = urllib.parse.quote(query)
         url = f"https://itunes.apple.com/search?term={encoded}&entity=song"
-        with urllib.request.urlopen(url, timeout=10) as response:
-            data = json.loads(response.read())
+        data = self._itunes_fetch(url)
+        if data is None:
+            return []
         return [
             {
                 "id": r["trackId"],
@@ -226,14 +243,15 @@ class AppleMusicProvider(MusicProvider):
                 "album": r["collectionName"],
                 "artwork_url": _upgrade_artwork_url(r.get("artworkUrl100", "")),
             }
-            for r in data["results"]
+            for r in data.get("results", [])
             if r.get("wrapperType") == "track"
         ]
 
     def get_album_tracks(self, album_id: str) -> List[Dict]:
         url = f"https://itunes.apple.com/lookup?id={album_id}&entity=song"
-        with urllib.request.urlopen(url, timeout=10) as response:
-            data = json.loads(response.read())
+        data = self._itunes_fetch(url)
+        if data is None:
+            return []
         collection = next(
             (r for r in data["results"] if r.get("wrapperType") == "collection"), None
         )
@@ -259,8 +277,9 @@ class AppleMusicProvider(MusicProvider):
 
     def get_track(self, track_id: str) -> List[Dict]:
         url = f"https://itunes.apple.com/lookup?id={track_id}"
-        with urllib.request.urlopen(url, timeout=10) as response:
-            data = json.loads(response.read())
+        data = self._itunes_fetch(url)
+        if data is None:
+            return []
         tracks = [r for r in data["results"] if r.get("wrapperType") == "track"]
         if not tracks:
             return []

@@ -1,4 +1,6 @@
 import argparse
+from contextlib import contextmanager
+from functools import wraps
 import json
 import logging
 import os
@@ -49,6 +51,40 @@ def handle_config_error(e):
         log.warning("Config error in request %s: %s", request.path, msg)
         return jsonify({"error": msg}), 503
     raise e
+
+
+def csrf_protected(fn):
+    """Ensure session has a CSRF token and validate it on POST requests."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if "csrf_token" not in session:
+            session["csrf_token"] = secrets.token_hex(32)
+        if request.method == "POST":
+            if request.form.get("csrf_token") != session.get("csrf_token"):
+                abort(403)
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+@contextmanager
+def _nfc_session(config):
+    """Yield an NFC instance with appropriate locking for pn532 mode.
+
+    Raises RuntimeError if NFC is not initialised, the lock times out, or
+    mock-mode initialisation fails. Callers catch RuntimeError → 503.
+    """
+    if config.get("nfc_mode") == "pn532":
+        nfc = nfc_service.get_nfc()
+        if nfc is None:
+            raise RuntimeError("NFC not initialised")
+        if not nfc_service._nfc_lock.acquire(timeout=2.0):
+            raise RuntimeError("NFC busy, try again")
+        try:
+            yield nfc
+        finally:
+            nfc_service._nfc_lock.release()
+    else:
+        yield _make_nfc(config)
 
 
 @app.context_processor
@@ -435,14 +471,9 @@ def write_tag():
                 else f"apple:{data['album_id']}")
     force = data.get("force", False)
 
-    if config.get("nfc_mode") == "pn532":
-        if nfc_service.get_nfc() is None:
-            return jsonify({"error": "NFC not initialised"}), 503
-        acquired = nfc_service._nfc_lock.acquire(timeout=2.0)
-        if not acquired:
-            return jsonify({"error": "NFC busy, try again"}), 503
-        try:
-            pre_read = nfc_service.get_nfc().read_tag()
+    try:
+        with _nfc_session(config) as nfc:
+            pre_read = nfc.read_tag() if config.get("nfc_mode") == "pn532" else None
             if not force and pre_read:
                 return jsonify({
                     "status": "confirm",
@@ -450,22 +481,13 @@ def write_tag():
                     "existing_display": _format_existing_tag(pre_read),
                 })
             try:
-                nfc_service.get_nfc().write_tag(tag_data)
+                nfc.write_tag(tag_data)
             except IOError as e:
                 if pre_read is None:
                     return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
-        finally:
-            nfc_service._nfc_lock.release()
-    else:
-        try:
-            nfc = _make_nfc(config)
-        except RuntimeError as e:
-            return jsonify({"error": str(e)}), 503
-        try:
-            nfc.write_tag(tag_data)
-        except IOError as e:
-            return jsonify({"error": str(e)}), 409
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
 
     try:
         _do_record_tag(tag_data, data)
@@ -478,33 +500,19 @@ def write_tag():
 def write_url_tag():
     url = request.host_url.rstrip("/")
     config = _load_config()
-    if config.get("nfc_mode") == "pn532":
-        if nfc_service.get_nfc() is None:
-            return jsonify({"error": "NFC not initialised"}), 503
-        acquired = nfc_service._nfc_lock.acquire(timeout=2.0)
-        if not acquired:
-            return jsonify({"error": "NFC busy, try again"}), 503
-        try:
-            pre_read = nfc_service.get_nfc().read_tag()
+    try:
+        with _nfc_session(config) as nfc:
+            pre_read = nfc.read_tag() if config.get("nfc_mode") == "pn532" else None
             try:
-                nfc_service.get_nfc().write_url_tag(url)
+                nfc.write_url_tag(url)
             except NotImplementedError as e:
                 return jsonify({"error": str(e)}), 501
             except IOError as e:
                 if pre_read is None:
                     return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
-        finally:
-            nfc_service._nfc_lock.release()
-    else:
-        try:
-            nfc = _make_nfc(config)
-        except RuntimeError as e:
-            return jsonify({"error": str(e)}), 503
-        try:
-            nfc.write_url_tag(url)
-        except NotImplementedError as e:
-            return jsonify({"error": str(e)}), 501
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
     return jsonify({"status": "ok", "written": url})
 
 
@@ -539,31 +547,26 @@ def settings():
 
 
 @app.route("/settings/sonos", methods=["GET", "POST"])
+@csrf_protected
 def settings_sonos():
     config = _load_config()
     saved = False
     if request.method == "POST":
-        token = request.form.get("csrf_token", "")
-        if not token or token != session.get("csrf_token"):
-            abort(403)
         config["speaker_ip"] = request.form.get("speaker_ip", config["speaker_ip"])
         config["speaker_name"] = request.form.get("speaker_name", config.get("speaker_name", ""))
         config["sn"] = request.form.get("sn", config["sn"])
         _save_config(config)
         saved = True
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_hex(32)
     return render_template("settings_sonos.html", config=config, saved=saved,
                            csrf_token=session["csrf_token"])
 
 
 @app.route("/settings/music")
+@csrf_protected
 def settings_music():
     config = _load_config()
     sonos_cfg = config.get("services", {}).get("sonos", {})
     connected = bool(sonos_cfg.get("access_token") and sonos_cfg.get("household_id"))
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_hex(32)
     return render_template(
         "settings_music.html",
         config=config,
@@ -574,10 +577,8 @@ def settings_music():
 
 
 @app.route("/settings/music/credentials", methods=["POST"])
+@csrf_protected
 def settings_music_credentials():
-    token = request.form.get("csrf_token", "")
-    if not token or token != session.get("csrf_token"):
-        abort(403)
     cfg = _load_config()
     cfg.setdefault("services", {}).setdefault("sonos", {})
     cfg["services"]["sonos"]["client_key"] = request.form.get("client_key", "").strip()
@@ -684,10 +685,8 @@ def sonos_status():
 
 
 @app.route("/sonos/disconnect", methods=["POST"])
+@csrf_protected
 def sonos_disconnect():
-    token = request.form.get("csrf_token", "")
-    if not token or token != session.get("csrf_token"):
-        abort(403)
     try:
         cfg = _load_config()
         cfg.get("services", {}).get("sonos", {}).clear()
@@ -704,14 +703,10 @@ def sonos_disconnect():
 
 
 @app.route("/settings/nfc", methods=["GET", "POST"])
+@csrf_protected
 def settings_nfc():
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_hex(32)
     if request.method == "POST":
         config = _load_config()
-        token = request.form.get("csrf_token", "")
-        if not token or token != session.get("csrf_token"):
-            abort(403)
         config["nfc_mode"] = request.form.get("nfc_mode", config["nfc_mode"])
         _save_config(config)
         return redirect(url_for("settings_hardware", nfc_saved=1))
@@ -724,13 +719,9 @@ def settings_sticker():
 
 
 @app.route("/settings/reboot", methods=["GET", "POST"])
+@csrf_protected
 def settings_reboot():
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_hex(32)
     if request.method == "POST":
-        token = request.form.get("csrf_token", "")
-        if not token or token != session.get("csrf_token"):
-            abort(403)
         if not IS_PRODUCTION:
             abort(403)
         try:
@@ -745,10 +736,8 @@ def settings_reboot():
 
 
 @app.route("/settings/restart", methods=["POST"])
+@csrf_protected
 def settings_restart():
-    token = request.form.get("csrf_token", "")
-    if not token or token != session.get("csrf_token"):
-        abort(403)
     if not IS_PRODUCTION:
         abort(403)
     try:
@@ -760,9 +749,8 @@ def settings_restart():
 
 
 @app.route("/settings/hardware")
+@csrf_protected
 def settings_hardware():
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_hex(32)
     restarting = request.args.get("restarting") == "1"
     rebooting = request.args.get("rebooting") == "1"
     nfc_saved = request.args.get("nfc_saved") == "1"
@@ -781,9 +769,8 @@ _PLACEHOLDERS = {
 
 
 @app.route("/settings/update")
+@csrf_protected
 def settings_update():
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_hex(32)
     config = _load_config()
     update_info = _check_for_update() if IS_PRODUCTION else None
     state, log_lines = _read_update_state()
@@ -810,10 +797,8 @@ def update_check():
 
 
 @app.route("/update/apply", methods=["POST"])
+@csrf_protected
 def update_apply():
-    token = request.form.get("csrf_token", "")
-    if not token or token != session.get("csrf_token"):
-        abort(403)
     state, _ = _read_update_state()
     if state == "running":
         return jsonify({"error": "Update already in progress"}), 409
@@ -837,10 +822,8 @@ def update_status():
 
 
 @app.route("/update/auto", methods=["POST"])
+@csrf_protected
 def update_auto():
-    token = request.form.get("csrf_token", "")
-    if not token or token != session.get("csrf_token"):
-        abort(403)
     config = _load_config()
     config["auto_update"] = request.form.get("auto_update") == "1"
     _save_config(config)

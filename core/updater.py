@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).parent.parent
 ROLLBACK_FILE = PROJECT_ROOT / ".update-rollback"
 
 

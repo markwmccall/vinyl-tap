@@ -126,6 +126,51 @@ x-sonos-http:song%3a{track_id}.mp4?sid=204&flags=8232&sn={sn}
 - The OADevID suffix is account-specific; discovered dynamically from `FV:2` Sonos Favorites
 - `sn=3` → `f7c0f087`, `sn=5` → `7cd348b3` (examples; always look up dynamically)
 
+## SMAPI token bootstrapping: known gap
+
+Playlist search uses SMAPI with Apple Music credentials (`smapi_token`, `smapi_key`,
+`smapi_household_id` in `config.json` under `services.apple`). Once a token is in place
+it auto-refreshes indefinitely via `refreshAuthToken`. The gap: **there is no in-app
+flow to acquire the initial token.**
+
+Apple Music uses the AppLink auth flow, which requires a registered Sonos partner app.
+`getAppLink` returns an encrypted response that only official Sonos partner apps can
+decode. `GetSessionId` (the simpler UPnP call) only works for "session auth" type services,
+not AppLink services like Apple Music.
+
+### Workaround: capture the token via mitmproxy
+
+This is how the initial token was obtained. It intercepts the Sonos app's SMAPI traffic.
+
+**Requirements:** Mac on the same WiFi as the iPhone running the Sonos app.
+
+```bash
+pip install mitmproxy
+mitmweb --listen-port 8080 \
+  --ignore-hosts "10\.0\.0\.\d+" \
+  --ignore-hosts "192\.168\.\d+\.\d+"
+```
+
+1. Set your iPhone WiFi proxy to `{mac_ip}:8080`
+2. Visit `http://mitm.it` on the iPhone and install the mitmproxy CA certificate
+3. Open the Sonos app and browse Apple Music (search something, open a playlist)
+4. In mitmweb, filter for requests to `sonos-music.apple.com`
+5. In any request header, find the `credentials` SOAP header — it contains:
+   - `<token>` → `smapi_token`
+   - `<key>` → `smapi_key`
+   - `<householdId>` → `smapi_household_id`
+6. Paste these values into `config.json` under `services.apple` and restart the service
+
+Once set, tokens refresh automatically. Re-capture is only needed if the token becomes
+permanently invalidated (e.g. Apple Music account re-linked in the Sonos app).
+
+### Workaround: copy from a working instance
+
+If you already have a working instance with a valid token (e.g. the dev Mac), copy
+`services.apple` from that `config.json` to the new instance. The token and household ID
+are tied to the Sonos household + Apple Music account, so they are identical across
+instances on the same account.
+
 ## Multi-service search: what has been ruled out
 
 | Approach | Why ruled out |

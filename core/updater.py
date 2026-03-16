@@ -86,8 +86,12 @@ def main(target_version: str) -> None:
     while time.time() < deadline:
         time.sleep(5)
         try:
+            import ssl
             import urllib.request
-            with urllib.request.urlopen("http://localhost/health", timeout=3) as r:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen("https://localhost/health", timeout=3, context=ctx) as r:
                 if r.status == 200:
                     healthy = True
                     break

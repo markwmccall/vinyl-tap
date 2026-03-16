@@ -383,7 +383,7 @@ def write_tag():
                 nfc.write_tag(tag_data)
             except IOError as e:
                 if pre_read is None:
-                    return jsonify({"error": "No tag present — place a card on the reader"}), 409
+                    return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
             if config.get("nfc_mode") == "pn532":
                 nfc_service.suppress_next_play(tag_data)

@@ -22,6 +22,20 @@ Sonos playback reference, and multi-service research notes.
 - Only commit when the user asks.
 - Use a branch; never push directly to `main`.
 
+## Planning
+
+- **All code implementations require a written plan before any code is written.** No vibe coding.
+- Plans live in `docs/plans/` as Markdown files (e.g. `docs/plans/feature-smapi-search.md`).
+- A plan must be detailed enough that implementation requires no on-the-fly discovery. It should include:
+  - Problem statement and goals
+  - Files to create or modify, and what changes each requires
+  - New functions/classes/routes and their signatures
+  - Data flow and any state changes
+  - Test cases that will be written
+  - Any open questions resolved before coding starts
+- Get explicit user approval of the plan before writing code.
+- If discovery during implementation reveals something the plan missed, stop and update the plan before proceeding.
+
 ## Code Style
 
 - Do not change punctuation, whitespace, or formatting in lines you are not otherwise modifying.

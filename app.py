@@ -368,9 +368,11 @@ def write_tag():
                 else f"apple:{data['album_id']}")
     force = data.get("force", False)
 
+    if config.get("nfc_mode") == "pn532" and nfc_service.get_nfc() is None:
+        return jsonify({"error": "NFC not initialised"}), 503
     try:
         with _nfc_session(config) as nfc:
-            pre_read = nfc.read_tag() if config.get("nfc_mode") == "pn532" else None
+            pre_read = nfc.read_tag()
             if not force and pre_read:
                 return jsonify({
                     "status": "confirm",
@@ -383,6 +385,8 @@ def write_tag():
                 if pre_read is None:
                     return jsonify({"error": "No tag present - place a card on the reader"}), 409
                 return jsonify({"error": str(e)}), 409
+            if config.get("nfc_mode") == "pn532":
+                nfc_service.suppress_next_play(tag_data)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 503
 

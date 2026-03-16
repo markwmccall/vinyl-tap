@@ -21,3 +21,8 @@ Sonos playback reference, and multi-service research notes.
 
 - Only commit when the user asks.
 - Use a branch; never push directly to `main`.
+
+## Code Style
+
+- Do not change punctuation, whitespace, or formatting in lines you are not otherwise modifying.
+- In particular, never convert hyphens (`-`) to em-dashes (`—`) or make other typographic substitutions in existing strings.

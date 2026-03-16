@@ -159,6 +159,7 @@ class TestWriteTag:
         import app
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.status_code == 200
@@ -168,6 +169,7 @@ class TestWriteTag:
         import app
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.get_json()["written"] == "apple:1440903625"
@@ -176,6 +178,7 @@ class TestWriteTag:
         import app
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"track_id": "1440904001"})
         assert resp.status_code == 200
@@ -185,6 +188,7 @@ class TestWriteTag:
         import app
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"track_id": "1440904001"})
         assert resp.get_json()["written"] == "apple:track:1440904001"
@@ -201,6 +205,7 @@ class TestWriteTag:
         import app
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
         mock_nfc.write_tag.side_effect = IOError("write failed")
         with patch("app.MockNFC", return_value=mock_nfc):
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
@@ -213,10 +218,9 @@ class TestWriteTag:
 
 
 class TestWriteTagPN532:
-    """Two-step write-tag flow tests using pn532 mode."""
+    """Write-tag flow tests using pn532 mode."""
 
-    def _pn532_config(self, tmp_path, monkeypatch):
-        import app, json
+    def _pn532_config(self, tmp_path, monkeypatch, card_content=""):
         config_file = tmp_path / "config_pn532.json"
         config_file.write_text(json.dumps({
             "sn": "3", "speaker_ip": "10.0.0.12",
@@ -225,20 +229,19 @@ class TestWriteTagPN532:
         monkeypatch.setattr(core_config, "CONFIG_PATH", str(config_file))
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = card_content
         monkeypatch.setattr(nfc_service, "_nfc", mock_nfc)
         return mock_nfc
 
     def test_blank_tag_writes_immediately(self, client, tmp_path, monkeypatch):
-        mock_nfc = self._pn532_config(tmp_path, monkeypatch)
-        mock_nfc.read_tag.return_value = None
+        mock_nfc = self._pn532_config(tmp_path, monkeypatch, card_content="")
         resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.status_code == 200
         assert resp.get_json()["status"] == "ok"
         mock_nfc.write_tag.assert_called_once_with("apple:1440903625")
 
     def test_existing_tag_returns_confirm(self, client, tmp_path, monkeypatch):
-        mock_nfc = self._pn532_config(tmp_path, monkeypatch)
-        mock_nfc.read_tag.return_value = "apple:9999999"
+        mock_nfc = self._pn532_config(tmp_path, monkeypatch, card_content="apple:9999999")
         with patch("app._format_existing_tag", return_value="Some Album by Some Artist"):
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.status_code == 200
@@ -248,54 +251,53 @@ class TestWriteTagPN532:
         mock_nfc.write_tag.assert_not_called()
 
     def test_confirm_contains_existing_display(self, client, tmp_path, monkeypatch):
-        mock_nfc = self._pn532_config(tmp_path, monkeypatch)
-        mock_nfc.read_tag.return_value = "apple:9999999"
+        self._pn532_config(tmp_path, monkeypatch, card_content="apple:9999999")
         with patch("app._format_existing_tag", return_value="Test Album by Test Artist"):
             resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.get_json()["existing_display"] == "Test Album by Test Artist"
 
     def test_existing_unrecognised_tag_shows_raw(self, client, tmp_path, monkeypatch):
-        mock_nfc = self._pn532_config(tmp_path, monkeypatch)
-        mock_nfc.read_tag.return_value = "spotify:album:abc123"
+        self._pn532_config(tmp_path, monkeypatch, card_content="spotify:album:abc123")
         resp = client.post("/write-tag", json={"album_id": "1440903625"})
         data = resp.get_json()
         assert data["status"] == "confirm"
         assert data["existing_display"] == "spotify:album:abc123"
 
     def test_force_overwrites_without_confirm(self, client, tmp_path, monkeypatch):
-        mock_nfc = self._pn532_config(tmp_path, monkeypatch)
-        mock_nfc.read_tag.return_value = "apple:1440903625"
+        mock_nfc = self._pn532_config(tmp_path, monkeypatch, card_content="apple:9999999")
         resp = client.post("/write-tag", json={"album_id": "1440903625", "force": True})
         assert resp.status_code == 200
         assert resp.get_json()["status"] == "ok"
         mock_nfc.write_tag.assert_called_once_with("apple:1440903625")
 
     def test_locked_tag_returns_409(self, client, tmp_path, monkeypatch):
-        # Locked tag has content; force=True skips confirm and attempts write
-        mock_nfc = self._pn532_config(tmp_path, monkeypatch)
-        mock_nfc.read_tag.return_value = "apple:1440903625"
+        mock_nfc = self._pn532_config(tmp_path, monkeypatch, card_content="apple:1440903625")
         mock_nfc.write_tag.side_effect = IOError("Tag is read-only (locked)")
         resp = client.post("/write-tag", json={"album_id": "1440903625", "force": True})
         assert resp.status_code == 409
         assert "locked" in resp.get_json()["error"]
 
-    def test_no_tag_present_returns_409_with_helpful_message(self, client, tmp_path, monkeypatch):
-        mock_nfc = self._pn532_config(tmp_path, monkeypatch)
-        mock_nfc.read_tag.return_value = None
-        mock_nfc.write_tag.side_effect = IOError("Tag is read-only (locked)")
+    def test_no_tag_present_returns_409(self, client, tmp_path, monkeypatch):
+        mock_nfc = self._pn532_config(tmp_path, monkeypatch, card_content=None)
+        mock_nfc.write_tag.side_effect = IOError("no card")
         resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.status_code == 409
         assert "No tag present" in resp.get_json()["error"]
 
     def test_lock_busy_returns_503(self, client, tmp_path, monkeypatch):
-        import app
-        self._pn532_config(tmp_path, monkeypatch)
+        self._pn532_config(tmp_path, monkeypatch, card_content="")
         mock_lock = MagicMock()
         mock_lock.acquire.return_value = False
         monkeypatch.setattr(nfc_service, "_nfc_lock", mock_lock)
         resp = client.post("/write-tag", json={"album_id": "1440903625"})
         assert resp.status_code == 503
         assert "busy" in resp.get_json()["error"]
+
+    def test_suppress_next_play_called_after_write(self, client, tmp_path, monkeypatch):
+        self._pn532_config(tmp_path, monkeypatch, card_content="")
+        with patch.object(nfc_service, "suppress_next_play") as mock_suppress:
+            client.post("/write-tag", json={"album_id": "1440903625"})
+        mock_suppress.assert_called_once_with("apple:1440903625")
 
 
 class TestWriteUrlTag:
@@ -1251,6 +1253,7 @@ class TestCollection:
         import app
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
         with patch("app.MockNFC", return_value=mock_nfc), \
              patch.object(providers.get_provider("apple"), "get_album_tracks", return_value=SAMPLE_TRACKS):
             client.post("/write-tag", json={"album_id": "1440903625"})
@@ -1263,6 +1266,7 @@ class TestCollection:
         import app
         monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
         mock_nfc = MagicMock()
+        mock_nfc.read_tag.return_value = None
         with patch("app.MockNFC", return_value=mock_nfc), \
              patch.object(providers.get_provider("apple"), "get_track", return_value=SAMPLE_SINGLE_TRACK):
             client.post("/write-tag", json={"track_id": "1440904001"})

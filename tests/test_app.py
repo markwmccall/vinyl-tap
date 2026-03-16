@@ -45,6 +45,26 @@ class TestIndex:
         resp = client.get("/")
         assert b"search" in resp.data.lower()
 
+    def test_playlist_tab_hidden_when_smapi_not_configured(self, client):
+        provider = providers.get_provider("apple")
+        original = provider._smapi
+        try:
+            provider._smapi = None
+            resp = client.get("/")
+            assert b"Playlists" not in resp.data
+        finally:
+            provider._smapi = original
+
+    def test_playlist_tab_shown_when_smapi_configured(self, client):
+        provider = providers.get_provider("apple")
+        original = provider._smapi
+        try:
+            provider._smapi = object()  # non-None sentinel
+            resp = client.get("/")
+            assert b"Playlists" in resp.data
+        finally:
+            provider._smapi = original
+
 
 class TestSearch:
     def test_returns_json_albums(self, client):

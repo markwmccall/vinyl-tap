@@ -269,7 +269,9 @@ def _do_record_tag(tag_data, data):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    provider = get_provider("apple")
+    smapi_enabled = getattr(provider, "_smapi", None) is not None
+    return render_template("index.html", smapi_enabled=smapi_enabled)
 
 
 @app.route("/search")

@@ -54,6 +54,7 @@ async function writeTag(body) {
       return;
     }
     if (data.status === 'confirm') {
+      status.textContent = '';
       document.getElementById('write-confirm-msg').textContent =
         'Tag already has: ' + data.existing_display;
       confirmBox.style.display = 'flex';

@@ -27,6 +27,16 @@ def get_nfc():
     return _nfc
 
 
+def suppress_next_play(tag_data: str) -> None:
+    """Prevent the background loop from playing the given tag on next poll.
+
+    Call this after writing to a tag via a web route (while _nfc_lock is held)
+    so the card sitting on the reader after the write does not trigger playback.
+    """
+    global _nfc_last_tag
+    _nfc_last_tag = tag_data
+
+
 def _nfc_loop(config_path):
     """Background NFC polling loop with debounce. Runs in a daemon thread.
 

@@ -3,7 +3,7 @@ import queue
 import threading
 import time
 
-from core.config import _load_config
+from core.config import _load_config, tag_in_collection, record_tag
 from core.nfc_interface import MockNFC, PN532NFC, parse_tag_data  # noqa: F401 (MockNFC re-exported for patching)
 from core.sonos_player import play_album, play_playlist
 from providers import get_provider
@@ -114,14 +114,41 @@ def _nfc_loop(config_path):
                 play_playlist(config["speaker_ip"], tag["id"], info.get("title", ""),
                               provider, config["sn"],
                               speaker_name=config.get("speaker_name"), config_path=config_path)
+                if info and not tag_in_collection(tag_data):
+                    _auto_record(tag_data, tag, info)
             else:
                 tracks = (provider.get_track(tag["id"]) if tag["type"] == "track"
                           else provider.get_album_tracks(tag["id"]))
                 play_album(config["speaker_ip"], tracks, provider, config["sn"],
                            speaker_name=config.get("speaker_name"), config_path=config_path)
+                if tracks and not tag_in_collection(tag_data):
+                    _auto_record(tag_data, tag, tracks)
             log.info("Playing %s %s", tag['type'], tag['id'])
         except Exception as e:
             log.error("NFC play error: %s", e, exc_info=True)
+
+
+def _auto_record(tag_string: str, parsed_tag: dict, provider_result) -> None:
+    """Build a metadata dict from provider results and record the tag."""
+    try:
+        meta = {"type": parsed_tag["type"]}
+        if parsed_tag["type"] == "playlist":
+            # provider_result is the dict from get_playlist_info() (already or {}-applied)
+            meta["name"] = provider_result.get("title", "")
+            meta["artwork_url"] = provider_result.get("artwork_url", "")
+            meta["playlist_id"] = parsed_tag["id"]
+        else:
+            # provider_result is a list of track dicts from get_album_tracks() / get_track()
+            first = provider_result[0]
+            meta["name"] = first.get("album", "") if parsed_tag["type"] == "album" else first.get("name", "")
+            meta["artist"] = first.get("artist", "")
+            meta["artwork_url"] = first.get("artwork_url", "")
+            meta["album_id"] = first.get("album_id") if parsed_tag["type"] == "album" else None
+            meta["track_id"] = first.get("track_id") if parsed_tag["type"] == "track" else None
+        record_tag(tag_string, meta)
+        log.info("Auto-registered tag: %s", tag_string)
+    except Exception as e:
+        log.warning("Auto-register failed for %s: %s", tag_string, e)
 
 
 def _start_nfc_thread(config_path):

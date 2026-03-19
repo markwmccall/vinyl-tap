@@ -192,10 +192,7 @@ def _configure_smapi():
 
 def _record_tag(tag_string, tag_type, name, artist, artwork_url, album_id=None, track_id=None, playlist_id=None):
     parse_tag_data(tag_string)  # raises ValueError if structurally invalid
-    tags = _load_tags()
-    tags = [t for t in tags if t["tag_string"] != tag_string]
-    tags.insert(0, {
-        "tag_string": tag_string,
+    core_config.record_tag(tag_string, {
         "type": tag_type,
         "name": name,
         "artist": artist,
@@ -203,9 +200,7 @@ def _record_tag(tag_string, tag_type, name, artist, artwork_url, album_id=None, 
         "album_id": album_id,
         "track_id": track_id,
         "playlist_id": playlist_id,
-        "written_at": datetime.utcnow().isoformat(),
     })
-    _save_tags(tags)
 
 
 def _make_nfc(config):

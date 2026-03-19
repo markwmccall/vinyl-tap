@@ -63,3 +63,33 @@ def _load_tags():
 def _save_tags(tags):
     with open(TAGS_PATH, "w") as f:
         json.dump(tags, f, indent=2)
+
+
+def tag_in_collection(tag_string: str) -> bool:
+    """Return True if tag_string already exists in the collection."""
+    return any(t.get("tag_string") == tag_string for t in _load_tags())
+
+
+def record_tag(tag_string: str, metadata: dict) -> None:
+    """Add or replace a tag entry in the collection.
+
+    metadata keys (all optional): name, artist, artwork_url,
+    album_id, track_id, playlist_id, type.
+    written_at is added automatically.
+    """
+    from datetime import datetime, timezone
+    tags = _load_tags()
+    tags = [t for t in tags if t.get("tag_string") != tag_string]
+    entry = {
+        "tag_string": tag_string,
+        "type": metadata.get("type", "album"),
+        "name": metadata.get("name", ""),
+        "artist": metadata.get("artist", ""),
+        "artwork_url": metadata.get("artwork_url", ""),
+        "album_id": metadata.get("album_id"),
+        "track_id": metadata.get("track_id"),
+        "playlist_id": metadata.get("playlist_id"),
+        "written_at": datetime.now(timezone.utc).isoformat(),
+    }
+    tags.insert(0, entry)
+    _save_tags(tags)

@@ -650,7 +650,7 @@ def settings_restart():
     if not IS_PRODUCTION:
         abort(403)
     try:
-        subprocess.Popen(["sudo", "systemctl", "restart", "vinyl-web"])
+        subprocess.Popen(["sudo", "systemctl", "restart", "vinyltap"])
     except OSError as e:
         log.error("Failed to launch restart: %s", e, exc_info=True)
         abort(500)
@@ -950,7 +950,7 @@ def verify():
 def logs():
     try:
         result = subprocess.run(
-            ["journalctl", "-u", "vinyl-web", "-n", "200", "--no-pager", "--output=short-iso"],
+            ["journalctl", "-u", "vinyltap", "-n", "200", "--no-pager", "--output=short-iso"],
             capture_output=True, text=True, timeout=5,
         )
         log_output = result.stdout or "(no log output)"

@@ -87,7 +87,7 @@ class TestParseNdefText:
     def test_returns_none_for_uri_record_type(self):
         from core.nfc_interface import _build_ndef_uri_tlv, _parse_ndef_text
         # URI records have type 'U' (0x55), not 'T' - should return None
-        tlv = _build_ndef_uri_tlv("http://vinyl-pi.local:5000")
+        tlv = _build_ndef_uri_tlv("http://vinyltap.local:5000")
         assert _parse_ndef_text(tlv) is None
 
     def test_parses_three_byte_length_encoding(self):
@@ -126,7 +126,7 @@ class TestBuildNdefTextTlv:
 class TestBuildNdefUriTlv:
     def test_http_prefix_code(self):
         from core.nfc_interface import _build_ndef_uri_tlv
-        tlv = _build_ndef_uri_tlv("http://vinyl-pi.local:5000")
+        tlv = _build_ndef_uri_tlv("http://vinyltap.local:5000")
         # Structure: 03 [len] D1 01 [pay_len] 55 [prefix_code] [body...]
         assert tlv[0] == 0x03   # NDEF TLV type
         assert tlv[2] == 0xD1   # record header
@@ -135,7 +135,7 @@ class TestBuildNdefUriTlv:
 
     def test_https_prefix_code(self):
         from core.nfc_interface import _build_ndef_uri_tlv
-        tlv = _build_ndef_uri_tlv("https://vinyl-pi.local")
+        tlv = _build_ndef_uri_tlv("https://vinyltap.local")
         assert tlv[6] == 0x04   # https:// prefix code
 
     def test_unknown_scheme_uses_no_prefix(self):
@@ -145,7 +145,7 @@ class TestBuildNdefUriTlv:
 
     def test_padded_to_4_byte_boundary(self):
         from core.nfc_interface import _build_ndef_uri_tlv
-        assert len(_build_ndef_uri_tlv("http://vinyl-pi.local:5000")) % 4 == 0
+        assert len(_build_ndef_uri_tlv("http://vinyltap.local:5000")) % 4 == 0
 
 
 class TestPN532NFC:
@@ -205,10 +205,10 @@ class TestPN532NFC:
         mock_pn532 = MagicMock()
         mock_pn532.ntag2xx_write_block.return_value = True
         nfc = self._make_nfc(mock_pn532)
-        result = nfc.write_url_tag("http://vinyl-pi.local:5000")
+        result = nfc.write_url_tag("http://vinyltap.local:5000")
         assert result is True
         first_call = mock_pn532.ntag2xx_write_block.call_args_list[0]
-        expected_tlv = _build_ndef_uri_tlv("http://vinyl-pi.local:5000")
+        expected_tlv = _build_ndef_uri_tlv("http://vinyltap.local:5000")
         assert first_call[0][1] == expected_tlv[0:4]
 
     def test_write_url_tag_raises_on_locked_tag(self):
@@ -216,7 +216,7 @@ class TestPN532NFC:
         mock_pn532.ntag2xx_write_block.return_value = False
         nfc = self._make_nfc(mock_pn532)
         with pytest.raises(IOError, match="locked"):
-            nfc.write_url_tag("http://vinyl-pi.local:5000")
+            nfc.write_url_tag("http://vinyltap.local:5000")
 
     def test_read_tag_stops_reading_when_block_returns_none(self):
         mock_pn532 = MagicMock()

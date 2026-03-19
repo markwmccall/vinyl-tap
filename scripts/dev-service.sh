@@ -1,13 +1,13 @@
 #!/bin/bash
-# Mac-specific dev service manager for vinyl-emulator.
+# Mac-specific dev service manager for vinyl-tap.
 # Runs app.py on port 443 with HTTPS (requires sudo).
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 CERTS_DIR="$PROJECT_ROOT/certs"
-CERT="$CERTS_DIR/vinyl-mac.local.crt"
-KEY="$CERTS_DIR/vinyl-mac.local.key"
+CERT="$CERTS_DIR/vinyltap-dev.local.crt"
+KEY="$CERTS_DIR/vinyltap-dev.local.key"
 VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
 APP="$PROJECT_ROOT/app.py"
 LOG="$PROJECT_ROOT/dev-server.log"
@@ -36,7 +36,7 @@ cmd_start() {
     echo "[OK] Already running (pid $PID)"
     return
   fi
-  echo "[+] Starting vinyl-emulator on https://vinyl-mac.local ..."
+  echo "[+] Starting vinyl-tap on https://vinyltap-dev.local ..."
   sudo -v
   sudo "$VENV_PYTHON" "$APP" \
     --host 0.0.0.0 --port 443 \
@@ -78,7 +78,7 @@ cmd_restart() {
 
 cmd_status() {
   if PID=$(_pid); then
-    echo "[OK] Running (pid $PID) — https://vinyl-mac.local"
+    echo "[OK] Running (pid $PID) — https://vinyltap-dev.local"
   else
     echo "[ ] Not running"
   fi

@@ -1,8 +1,8 @@
-# Vinyl Emulator
+# Vinyl Tap
 
-<img src="static/logo.svg" width="80" alt="Vinyl Emulator logo">
+<img src="static/logo.svg" width="80" alt="Vinyl Tap logo">
 
-[![Tests](https://github.com/markwmccall/vinyl-emulator/actions/workflows/tests.yml/badge.svg)](https://github.com/markwmccall/vinyl-emulator/actions/workflows/tests.yml)
+[![Tests](https://github.com/markwmccall/vinyl-tap/actions/workflows/tests.yml/badge.svg)](https://github.com/markwmccall/vinyl-tap/actions/workflows/tests.yml)
 
 Tap an NFC card → an album or song plays on your Sonos speaker.
 
@@ -42,7 +42,7 @@ A web app running on the Pi lets you:
 
 Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/). Select **Raspberry Pi OS Lite (64-bit)**. Before writing, open the settings and configure:
 
-- Hostname: anything you like (e.g. `vinyl-pi`) — this becomes `hostname.local` on your network
+- Hostname: anything you like (e.g. `vinyltap`) — this becomes `hostname.local` on your network
 - Enable SSH
 - Set a username and password
 - Configure your WiFi network
@@ -80,10 +80,10 @@ You should see `/dev/spidev0.0`. If nothing appears, check that the HAT is firml
 ### 4. Install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-emulator/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-tap/main/scripts/install.sh | bash
 ```
 
-This downloads the latest release and runs setup — installs dependencies, enables SPI, generates an SSL certificate, creates the config, and installs the `vinyl-web` systemd service. It will prompt you to reboot at the end.
+This downloads the latest release and runs setup — installs dependencies, enables SPI, generates an SSL certificate, creates the config, and installs the `vinyltap` systemd service. It will prompt you to reboot at the end.
 
 > **Note for Pi Zero 2 W users:** The first run compiles `lxml` from source, which can take 10–20 minutes. This is a one-time cost.
 
@@ -104,7 +104,7 @@ Open `http://your-hostname.local` in your browser, go to **Settings → Update**
 ## Troubleshooting
 
 **`http://your-hostname.local` doesn't load**
-- Check the service is running: `sudo systemctl status vinyl-web`
+- Check the service is running: `sudo systemctl status vinyltap`
 - Check the Pi is on the network: `ping your-hostname.local`
 - Try the IP address directly if mDNS isn't resolving
 
@@ -115,7 +115,7 @@ Open `http://your-hostname.local` in your browser, go to **Settings → Update**
 - If `/dev/spidev0.0` is missing, SPI may not be enabled — re-run `scripts/setup.sh` or run `sudo raspi-config` and enable SPI under Interface Options
 
 **Music doesn't play after tapping a card**
-- Check `sudo systemctl status vinyl-web` for errors
+- Check `sudo systemctl status vinyltap` for errors
 - Confirm `speaker_ip` and `sn` are set correctly in Settings
 - Try Play Now from the web UI to rule out a Sonos configuration issue
 

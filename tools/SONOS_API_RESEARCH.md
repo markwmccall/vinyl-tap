@@ -108,6 +108,24 @@ credentials (see below), Apple Music returns an empty `callToAction` with
 `appUrlEncrypt=true` — indicating the auth URL is encrypted and only
 decryptable by a registered partner.
 
+**Token lifespan observation (March 2026):** Traffic capture of Sonify via
+Proxyman revealed that the `key` field in the Apple Music `loginToken` is a
+Unix timestamp in milliseconds representing the token expiry. A token captured
+in March 2026 had `key=1770586134897`, decoding to ~February 2027 — indicating
+tokens are valid for approximately one year, not ~1 hour as previously assumed.
+
+**Token acquisition is hidden in encrypted iCloud tunnels.** Proxyman capture
+of Sonify (fresh install + search) showed 120+ CONNECT tunnels to
+`gateway.icloud.com` that cannot be decrypted. The `loginToken` credentials
+were already present when the first SMAPI search fired — the acquisition flow
+is not visible at the HTTP layer. Tokens are likely stored in iCloud Keychain
+(which survives app delete/reinstall) and obtained during the original AppLink
+flow at first setup.
+
+**Sonify does NOT call `api.sonos.com`.** It calls `sonos-music.apple.com`
+directly with cached credentials. The Sonos Control API is not involved in
+its search flow.
+
 ### DeviceLink (used by Amazon Music, TIDAL)
 
 1. Client generates a random `linkCode` (UUID).

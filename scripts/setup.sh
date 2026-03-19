@@ -1,10 +1,10 @@
 #!/bin/bash
-# Vinyl Emulator - Raspberry Pi setup script
+# Vinyl Tap - Raspberry Pi setup script
 # Run once after cloning the repo on the Pi:
 #   chmod +x scripts/setup.sh && ./scripts/setup.sh
 #
 # After the script finishes it will prompt you to reboot (required for SPI).
-# After rebooting, open http://vinyl-pi.local:5000 in your browser,
+# After rebooting, open https://vinyltap.local in your browser,
 # go to Settings, and fill in your speaker IP and sn value.
 
 set -e
@@ -13,7 +13,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 USERNAME="$(whoami)"
 
 echo ""
-echo "=== Vinyl Emulator Setup ==="
+echo "=== Vinyl Tap Setup ==="
 echo "Repo: $REPO_DIR"
 echo "User: $USERNAME"
 echo ""
@@ -66,7 +66,7 @@ sudo chown "$USERNAME" /etc/authbind/byport/443
 sudo chmod 500 /etc/authbind/byport/443
 
 # --- Stop service before touching the venv ---
-sudo systemctl stop vinyl-web 2>/dev/null || true
+sudo systemctl stop vinyltap 2>/dev/null || true
 
 # --- Python dependencies ---
 echo "[3/5] Creating venv and installing Python dependencies..."
@@ -97,22 +97,22 @@ fi
 echo "[5/5] Installing systemd services..."
 
 # Substitute actual username, repo path, and hostname into service file
-sed "s|/home/pi/vinyl-emulator|$REPO_DIR|g; s|User=pi|User=$USERNAME|g; s|PI_HOSTNAME|$PI_HOSTNAME|g" \
-    "$REPO_DIR/etc/vinyl-web.service" \
-    | sudo tee /etc/systemd/system/vinyl-web.service > /dev/null
+sed "s|/home/pi/vinyl-tap|$REPO_DIR|g; s|User=pi|User=$USERNAME|g; s|PI_HOSTNAME|$PI_HOSTNAME|g" \
+    "$REPO_DIR/etc/vinyltap.service" \
+    | sudo tee /etc/systemd/system/vinyltap.service > /dev/null
 
 sudo systemctl daemon-reload
-sudo systemctl enable vinyl-web
-sudo systemctl restart vinyl-web
+sudo systemctl enable vinyltap
+sudo systemctl restart vinyltap
 echo "      Service installed, enabled, and restarted"
 
-# Sudoers: allow the service user to restart vinyl-web (needed by updater)
-echo "$USERNAME ALL=(ALL) NOPASSWD: /bin/systemctl restart vinyl-web" \
-    | sudo tee /etc/sudoers.d/vinyl-emulator-update > /dev/null
-sudo chmod 440 /etc/sudoers.d/vinyl-emulator-update
+# Sudoers: allow the service user to restart vinyltap (needed by updater)
+echo "$USERNAME ALL=(ALL) NOPASSWD: /bin/systemctl restart vinyltap" \
+    | sudo tee /etc/sudoers.d/vinyltap-update > /dev/null
+sudo chmod 440 /etc/sudoers.d/vinyltap-update
 
 # Remove obsolete sudoers entry if present
-sudo rm -f /etc/sudoers.d/vinyl-emulator
+sudo rm -f /etc/sudoers.d/vinyl-emulator-update
 
 # --- Optional: disable WiFi power management ---
 echo ""

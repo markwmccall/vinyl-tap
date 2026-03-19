@@ -30,27 +30,27 @@ def client():
 
 class TestGetAuthUrl:
     def test_returns_sonos_base_url(self, client):
-        url = client.get_auth_url("https://vinyl-mac.local/sonos/callback", "state1")
+        url = client.get_auth_url("https://vinyltap-dev.local/sonos/callback", "state1")
         assert url.startswith("https://api.sonos.com/login/v3/oauth?")
 
     def test_includes_client_id(self, client):
-        url = client.get_auth_url("https://vinyl-mac.local/sonos/callback", "state1")
+        url = client.get_auth_url("https://vinyltap-dev.local/sonos/callback", "state1")
         assert "client_id=test-key" in url
 
     def test_includes_response_type_code(self, client):
-        url = client.get_auth_url("https://vinyl-mac.local/sonos/callback", "state1")
+        url = client.get_auth_url("https://vinyltap-dev.local/sonos/callback", "state1")
         assert "response_type=code" in url
 
     def test_includes_scope(self, client):
-        url = client.get_auth_url("https://vinyl-mac.local/sonos/callback", "state1")
+        url = client.get_auth_url("https://vinyltap-dev.local/sonos/callback", "state1")
         assert "scope=playback-control-all" in url
 
     def test_includes_state(self, client):
-        url = client.get_auth_url("https://vinyl-mac.local/sonos/callback", "my-state")
+        url = client.get_auth_url("https://vinyltap-dev.local/sonos/callback", "my-state")
         assert "state=my-state" in url
 
     def test_includes_redirect_uri(self, client):
-        url = client.get_auth_url("https://vinyl-mac.local/sonos/callback", "s")
+        url = client.get_auth_url("https://vinyltap-dev.local/sonos/callback", "s")
         assert "redirect_uri=" in url
 
 
@@ -59,7 +59,7 @@ class TestExchangeCode:
         resp = make_response({"access_token": "acc", "refresh_token": "ref", "expires_in": 3600})
         with patch("urllib.request.urlopen", return_value=resp):
             access, refresh, expires = client.exchange_code(
-                "code123", "https://vinyl-mac.local/sonos/callback"
+                "code123", "https://vinyltap-dev.local/sonos/callback"
             )
         assert access == "acc"
         assert refresh == "ref"
@@ -68,19 +68,19 @@ class TestExchangeCode:
     def test_raises_sonos_auth_error_on_http_error(self, client):
         with patch("urllib.request.urlopen", side_effect=make_http_error(400, '{"error":"invalid_grant"}')):
             with pytest.raises(SonosAuthError, match="400"):
-                client.exchange_code("bad-code", "https://vinyl-mac.local/sonos/callback")
+                client.exchange_code("bad-code", "https://vinyltap-dev.local/sonos/callback")
 
     def test_uses_basic_auth_header(self, client):
         resp = make_response({"access_token": "a", "refresh_token": "r", "expires_in": 1})
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:
-            client.exchange_code("c", "https://vinyl-mac.local/sonos/callback")
+            client.exchange_code("c", "https://vinyltap-dev.local/sonos/callback")
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization").startswith("Basic ")
 
     def test_posts_to_token_url(self, client):
         resp = make_response({"access_token": "a", "refresh_token": "r", "expires_in": 1})
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:
-            client.exchange_code("c", "https://vinyl-mac.local/sonos/callback")
+            client.exchange_code("c", "https://vinyltap-dev.local/sonos/callback")
         req = mock_open.call_args[0][0]
         assert "oauth/access" in req.full_url
 

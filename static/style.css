@@ -141,7 +141,7 @@ nav {
   justify-content: space-between;
 }
 nav a { color: var(--text); text-decoration: none; }
-nav .logo { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.4rem; }
+nav .logo { font-family: 'Metal Mania', cursive; font-size: 1.3rem; font-weight: 400; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.4rem; }
 nav .logo img { display: block; flex-shrink: 0; }
 nav a:hover { color: #000; }
 .nav-links { display: flex; gap: 1.25rem; align-items: center; }

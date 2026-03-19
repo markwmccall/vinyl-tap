@@ -3,11 +3,21 @@ import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
-CONFIG_PATH = str(PROJECT_ROOT / "config.json")
-TAGS_PATH = str(PROJECT_ROOT / "data" / "tags.json")
+DATA_DIR: Path = Path.home() / ".local" / "share" / "vinyltap"
+CONFIG_PATH: str = str(DATA_DIR / "config.json")
+TAGS_PATH: str = str(DATA_DIR / "tags.json")
 
 _VERSION_FILE = PROJECT_ROOT / "VERSION"
 VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else "0.0.0"
+
+
+def set_data_dir(path) -> None:
+    """Set the data directory and update derived paths. Creates the directory."""
+    global DATA_DIR, CONFIG_PATH, TAGS_PATH
+    DATA_DIR = Path(path).expanduser().resolve()
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH = str(DATA_DIR / "config.json")
+    TAGS_PATH = str(DATA_DIR / "tags.json")
 
 
 def _load_config():

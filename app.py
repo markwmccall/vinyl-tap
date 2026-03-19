@@ -25,7 +25,8 @@ from core.sonos_player import get_now_playing, get_speakers, get_volume, next_tr
 
 import core.nfc_service as nfc_service
 import core.updater_service as updater_service
-from core.config import CONFIG_PATH, TAGS_PATH, PROJECT_ROOT, VERSION, _load_config, _save_config, _load_tags, _save_tags
+import core.config as core_config
+from core.config import PROJECT_ROOT, VERSION, _load_config, _save_config, _load_tags, _save_tags
 from core.updater_service import _check_for_update, _read_update_state, _auto_update_loop
 
 app = Flask(__name__)
@@ -423,13 +424,13 @@ def _dispatch_play(provider, tag_type, tag_id, config):
         info = provider.get_playlist_info(tag_id) or {}
         play_playlist(config["speaker_ip"], tag_id, info.get("title", ""),
                       provider, config["sn"],
-                      speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+                      speaker_name=config.get("speaker_name"), config_path=core_config.CONFIG_PATH)
     else:
         tracks = provider.get_track(tag_id) if tag_type == "track" else provider.get_album_tracks(tag_id)
         if not tracks:
             return jsonify({"error": "not found"}), 404
         play_album(config["speaker_ip"], tracks, provider, config["sn"],
-                   speaker_name=config.get("speaker_name"), config_path=CONFIG_PATH)
+                   speaker_name=config.get("speaker_name"), config_path=core_config.CONFIG_PATH)
     return None
 
 
@@ -882,20 +883,20 @@ def transport():
     config = _load_config()
     name = config.get("speaker_name")
     if action == "pause":
-        pause(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
+        pause(config["speaker_ip"], speaker_name=name, config_path=core_config.CONFIG_PATH)
     elif action == "resume":
-        resume(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
+        resume(config["speaker_ip"], speaker_name=name, config_path=core_config.CONFIG_PATH)
     elif action == "next":
-        next_track(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
+        next_track(config["speaker_ip"], speaker_name=name, config_path=core_config.CONFIG_PATH)
     elif action == "prev":
-        prev_track(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
+        prev_track(config["speaker_ip"], speaker_name=name, config_path=core_config.CONFIG_PATH)
     elif action == "volume":
         value = data.get("value")
         if value is None or not (0 <= int(value) <= 100):
             return jsonify({"error": "value must be 0-100"}), 400
-        set_volume(config["speaker_ip"], value, speaker_name=name, config_path=CONFIG_PATH)
+        set_volume(config["speaker_ip"], value, speaker_name=name, config_path=core_config.CONFIG_PATH)
     else:
-        stop(config["speaker_ip"], speaker_name=name, config_path=CONFIG_PATH)
+        stop(config["speaker_ip"], speaker_name=name, config_path=core_config.CONFIG_PATH)
     return jsonify({"status": "ok", "action": action})
 
 
@@ -984,13 +985,17 @@ if __name__ == "__main__":  # pragma: no cover
                         help="SSL certificate file (enables HTTPS)")
     parser.add_argument("--ssl-key", metavar="KEY",
                         help="SSL private key file (enables HTTPS)")
+    parser.add_argument("--data-dir",
+                        default=str(Path.home() / ".local" / "share" / "vinyltap"),
+                        help="Directory for config.json and tags.json (default: ~/.local/share/vinyltap)")
     args = parser.parse_args()
+    core_config.set_data_dir(args.data_dir)
     ssl_context = None
     if args.ssl_cert and args.ssl_key:
         ssl_context = (args.ssl_cert, args.ssl_key)
     _configure_sonos()
     _configure_smapi()
-    nfc_service._start_nfc_thread(CONFIG_PATH)
+    nfc_service._start_nfc_thread(core_config.CONFIG_PATH)
     threading.Thread(target=_auto_update_loop, daemon=True).start()
     # Suppress werkzeug "development server" warning — this is a single-user
     # Pi appliance, not a multi-tenant web service.

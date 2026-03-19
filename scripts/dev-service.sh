@@ -12,6 +12,7 @@ VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
 APP="$PROJECT_ROOT/app.py"
 LOG="$PROJECT_ROOT/dev-server.log"
 PGREP_PATTERN="python.*app\.py"
+DATA_DIR="$HOME/.local/share/vinyltap-dev"
 
 _pid() {
   local pid
@@ -41,6 +42,7 @@ cmd_start() {
   sudo "$VENV_PYTHON" "$APP" \
     --host 0.0.0.0 --port 443 \
     --ssl-cert "$CERT" --ssl-key "$KEY" \
+    --data-dir "$DATA_DIR" \
     >> "$LOG" 2>&1 &
   sleep 1
   if PID=$(_pid); then

@@ -60,6 +60,27 @@ else
   echo "[OK] Virtual environment ready"
 fi
 
+# ── 5. Data directory (migrate from old in-project location if needed) ────────
+DATA_DIR="$HOME/.local/share/vinyltap-dev"
+mkdir -p "$DATA_DIR"
+
+if [ -f "$PROJECT_ROOT/config.json" ] && [ ! -f "$DATA_DIR/config.json" ]; then
+  cp "$PROJECT_ROOT/config.json" "$DATA_DIR/config.json"
+  echo "[+] Migrated config.json to $DATA_DIR"
+else
+  echo "[OK] Data directory ready ($DATA_DIR)"
+fi
+
+if [ ! -f "$DATA_DIR/tags.json" ]; then
+  if [ -f "$PROJECT_ROOT/data/tags.json" ]; then
+    cp "$PROJECT_ROOT/data/tags.json" "$DATA_DIR/tags.json"
+    echo "[+] Migrated tags.json to $DATA_DIR"
+  elif [ -f "$PROJECT_ROOT/tags.json" ]; then
+    cp "$PROJECT_ROOT/tags.json" "$DATA_DIR/tags.json"
+    echo "[+] Migrated tags.json to $DATA_DIR"
+  fi
+fi
+
 echo ""
 echo "Setup complete!"
 echo ""

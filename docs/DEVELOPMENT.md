@@ -28,6 +28,24 @@ Opens at `https://vinyltap-dev.local`. In dev mode (`INVOCATION_ID` not set), pr
 
 > The web UI has no authentication — only expose it on a trusted network.
 
+## Startup Parameters
+
+`app.py` accepts the following command-line arguments:
+
+| Argument | Default | Description |
+|---|---|---|
+| `--host` | `127.0.0.1` | Host/IP to bind the Flask server |
+| `--port` | `5000` | Port to bind the Flask server |
+| `--ssl-cert` | _(none)_ | Path to SSL certificate file (enables HTTPS) |
+| `--ssl-key` | _(none)_ | Path to SSL private key file (enables HTTPS) |
+| `--data-dir` | `~/.local/share/vinyltap` | Directory for `config.json` and `tags.json` |
+
+Per-environment defaults:
+
+- **Pi (prod):** all five set via `etc/vinyltap.service`, substituted by `scripts/setup.sh`. Data dir: `~/.local/share/vinyltap`.
+- **Mac (dev):** `--host`, `--port`, `--ssl-cert`, `--ssl-key` set by `scripts/dev-service.sh`. Data dir: `~/.local/share/vinyltap-dev`.
+- **Tests:** `set_data_dir(tmp_path)` called via the `temp_config` fixture — isolated per test, no side effects.
+
 ## Tests
 
 ```bash

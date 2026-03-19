@@ -1,26 +1,26 @@
 #!/bin/bash
-# Manage the vinyl-web service
+# Manage the vinyltap service
 # Usage: ./service.sh [start|stop|restart|status|logs]
 
 case "${1:-status}" in
     start)
-        sudo systemctl start vinyl-web
+        sudo systemctl start vinyltap
         echo "Started."
         ;;
     stop)
-        sudo systemctl stop vinyl-web
+        sudo systemctl stop vinyltap
         echo "Stopped."
         ;;
     restart)
-        sudo systemctl restart vinyl-web
+        sudo systemctl restart vinyltap
         echo "Restarted."
         ;;
     status)
-        sudo systemctl status vinyl-web
+        sudo systemctl status vinyltap
         ;;
     logs)
         lines="${2:-50}"
-        sudo journalctl -u vinyl-web -n "$lines" -f
+        sudo journalctl -u vinyltap -n "$lines" -f
         ;;
     *)
         echo "Usage: $0 [start|stop|restart|status|logs]"

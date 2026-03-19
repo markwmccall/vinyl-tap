@@ -8,12 +8,12 @@
 ## Setup
 
 ```bash
-git clone https://github.com/markwmccall/vinyl-emulator.git
-cd vinyl-emulator
+git clone https://github.com/markwmccall/vinyl-tap.git
+cd vinyl-tap
 ./scripts/dev-setup.sh
 ```
 
-This creates a virtualenv, installs dependencies, and generates SSL certs for `vinyl-mac.local`.
+This creates a virtualenv, installs dependencies, and generates SSL certs for `vinyltap-dev.local`.
 
 ## Running locally
 
@@ -24,7 +24,7 @@ This creates a virtualenv, installs dependencies, and generates SSL certs for `v
 ./scripts/dev-service.sh logs
 ```
 
-Opens at `https://vinyl-mac.local`. In dev mode (`INVOCATION_ID` not set), production-only features (Updates, Restart App, Reboot) show a hint instead of controls.
+Opens at `https://vinyltap-dev.local`. In dev mode (`INVOCATION_ID` not set), production-only features (Updates, Restart App, Reboot) show a hint instead of controls.
 
 > The web UI has no authentication — only expose it on a trusted network.
 
@@ -59,7 +59,7 @@ scripts/
   setup.sh              One-shot device setup script
   install.sh            One-curl fresh install from latest GitHub release
   release.sh            Cut a release (bumps VERSION, tags, pushes)
-  service.sh            Manage vinyl-web systemd service on device
+  service.sh            Manage vinyltap systemd service on device
 tools/                  Diagnostic scripts and research notes
 etc/                    systemd service file
 config.json             Runtime config (not committed)
@@ -71,7 +71,7 @@ docs/                   Development guide
 
 ## Architecture
 
-`vinyl-web` is a single systemd service running one Python process. Flask and NFC polling
+`vinyltap` is a single systemd service running one Python process. Flask and NFC polling
 share the same process — NFC runs as a daemon thread.
 
 **Why one process?** Two processes sharing the PN532 over I2C caused bus contention and
@@ -211,9 +211,9 @@ Tags are written as NDEF text records. NTAG213 cards (144 bytes) are more than l
 ## Service management (on device)
 
 ```bash
-sudo systemctl status vinyl-web   # check if running
-sudo systemctl restart vinyl-web  # restart
-sudo journalctl -u vinyl-web -f   # follow logs
+sudo systemctl status vinyltap   # check if running
+sudo systemctl restart vinyltap  # restart
+sudo journalctl -u vinyltap -f   # follow logs
 ```
 
 ## Creating a release

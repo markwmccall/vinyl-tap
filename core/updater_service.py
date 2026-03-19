@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 UPDATE_LOG = PROJECT_ROOT / "update.log"
 UPDATER_PATH = PROJECT_ROOT / "core" / "updater.py"
 
-GITHUB_REPO = "markwmccall/vinyl-emulator"
+GITHUB_REPO = "markwmccall/vinyl-tap"
 
 # Cache for GitHub release check: (timestamp, result_dict)
 _update_cache = None  # type: tuple | None  (timestamp, result_dict)

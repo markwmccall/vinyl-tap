@@ -61,4 +61,4 @@ git push origin "$TAG"
 
 echo ""
 echo "Done. GitHub Actions will run tests and publish the release."
-echo "https://github.com/markwmccall/vinyl-emulator/actions"
+echo "https://github.com/markwmccall/vinyl-tap/actions"

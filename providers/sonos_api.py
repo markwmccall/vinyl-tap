@@ -23,8 +23,8 @@ class SonosControlClient:
 
     Each environment has its own client_key + client_secret pair registered in
     the Sonos developer portal, with a matching redirect URI:
-      - Pi:  vinyl-emulator-key  / https://vinyl-pi.local/sonos/callback
-      - Dev: vinyl-emulator-dev-key / https://vinyl-mac.local/sonos/callback
+      - Pi:  vinyl-tap-key  / https://vinyltap.local/sonos/callback
+      - Dev: vinyl-tap-dev-key / https://vinyltap-dev.local/sonos/callback
 
     client_key is used as client_id in the authorize URL and as the Basic auth
     username for token exchange. client_secret is the Basic auth password.

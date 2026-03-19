@@ -585,7 +585,7 @@ class TestSettingsReboot:
 
 
 FAKE_HW_STATS = {
-    "hostname": "vinyl-pi", "os": "Raspberry Pi OS 12", "kernel": "6.1.0",
+    "hostname": "vinyltap", "os": "Raspberry Pi OS 12", "kernel": "6.1.0",
     "uptime": "2d 3h 5m", "cpu_model": "Raspberry Pi 4 Model B Rev 1.4",
     "cpu_cores": 4, "cpu_percent": 12.5, "cpu_freq_mhz": 1800, "cpu_temp_c": 48.2,
     "ram_used": "1.2 GB", "ram_total": "3.7 GB", "ram_percent": 32.4,
@@ -622,7 +622,7 @@ class TestSettingsHardware:
     def test_renders_hw_stats(self, client, temp_config):
         with patch("app.get_hardware_stats", return_value=FAKE_HW_STATS):
             resp = client.get("/settings/hardware")
-        assert b"vinyl-pi" in resp.data
+        assert b"vinyltap" in resp.data
         assert b"Raspberry Pi 4 Model B" in resp.data
         assert b"1.2 GB" in resp.data
         assert b"8.0 GB" in resp.data
@@ -810,7 +810,7 @@ class TestSettingsRestart:
         with patch("app.subprocess.Popen") as mock_popen:
             resp = client.post("/settings/restart", data={"csrf_token": "test-token"})
         assert resp.status_code == 302
-        mock_popen.assert_called_once_with(["sudo", "systemctl", "restart", "vinyl-web"])
+        mock_popen.assert_called_once_with(["sudo", "systemctl", "restart", "vinyltap"])
 
     def test_post_redirects_to_hardware_with_restarting(self, client, temp_config, monkeypatch):
         import app
@@ -1090,7 +1090,7 @@ class TestHealth:
 class TestLogs:
     def test_returns_200(self, client):
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value.stdout = "Mar 05 10:00:00 vinyl-pi vinyl-web[123]: INFO started\n"
+            mock_run.return_value.stdout = "Mar 05 10:00:00 vinyltap vinyltap[123]: INFO started\n"
             resp = client.get("/logs")
         assert resp.status_code == 200
 

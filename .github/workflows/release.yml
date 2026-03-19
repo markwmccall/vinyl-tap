@@ -42,5 +42,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            --title "Vinyl Emulator $GITHUB_REF_NAME" \
+            --title "Vinyl Tap $GITHUB_REF_NAME" \
             --generate-notes

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vinyl Emulator updater — runs as a detached subprocess launched by app.py.
+Vinyl Tap updater — runs as a detached subprocess launched by app.py.
 
 Usage: python3 updater.py <target_version>
   e.g. python3 updater.py 1.2.0
@@ -72,8 +72,8 @@ def main(target_version: str) -> None:
         return
 
     # Restart the service (requires passwordless sudo via sudoers)
-    print("Restarting vinyl-web service...", flush=True)
-    result = run(["sudo", "systemctl", "restart", "vinyl-web"])
+    print("Restarting vinyltap service...", flush=True)
+    result = run(["sudo", "systemctl", "restart", "vinyltap"])
     if result.returncode != 0:
         print("STATE: failed", flush=True)
         print("Error: systemctl restart failed", flush=True)
@@ -105,7 +105,7 @@ def main(target_version: str) -> None:
     else:
         print("Health check timed out — rolling back", flush=True)
         run(["git", "reset", "--hard", rollback_commit], cwd=PROJECT_ROOT)
-        run(["sudo", "systemctl", "restart", "vinyl-web"])
+        run(["sudo", "systemctl", "restart", "vinyltap"])
         print("STATE: failed", flush=True)
 
 

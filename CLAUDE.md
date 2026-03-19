@@ -1,4 +1,4 @@
-# Vinyl Emulator — Claude Code Instructions
+# Vinyl Tap — Claude Code Instructions
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for architecture, hardware gotchas,
 Sonos playback reference, and multi-service research notes.
@@ -34,6 +34,7 @@ Sonos playback reference, and multi-service research notes.
   - Test cases that will be written
   - Any open questions resolved before coding starts
 - Get explicit user approval of the plan before writing code.
+- Plans must include intermediate verification steps — not just a final test at the end. After each logical part (e.g. code changes, template changes, script changes), specify what to check before moving on: which tests to run, what to grep, what to confirm exists or is gone.
 - If discovery during implementation reveals something the plan missed, stop and update the plan before proceeding.
 
 ## Code Style

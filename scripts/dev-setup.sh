@@ -1,15 +1,15 @@
 #!/bin/bash
-# One-time dev environment setup for vinyl-emulator on macOS.
+# One-time dev environment setup for vinyl-tap on macOS.
 # Safe to re-run — skips steps already done.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CERTS_DIR="$SCRIPT_DIR/certs"
-CERT="$CERTS_DIR/vinyl-mac.local.crt"
-KEY="$CERTS_DIR/vinyl-mac.local.key"
-HOSTNAME="vinyl-mac.local"
+CERT="$CERTS_DIR/vinyltap-dev.local.crt"
+KEY="$CERTS_DIR/vinyltap-dev.local.key"
+HOSTNAME="vinyltap-dev.local"
 
-echo "=== Vinyl Emulator — Mac Dev Setup ==="
+echo "=== Vinyl Tap — Mac Dev Setup ==="
 echo ""
 
 # ── 1. /etc/hosts ────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ echo "  2. Open https://$HOSTNAME in your browser"
 echo "  3. Go to Settings → Music Services"
 echo "  4. Enter your dev key credentials and click Connect Sonos Account"
 echo ""
-echo "  Dev key (vinyl-emulator-dev-key):"
+echo "  Dev key (vinyl-tap-dev-key):"
 echo "    Key:          48e8d7f6-abee-4375-8f46-f853baa0d615"
 echo "    Secret:       0a2dc6fa-37dc-4b06-8dae-46b82c11556b"
 echo "    Redirect URI: https://$HOSTNAME/sonos/callback"

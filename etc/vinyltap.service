@@ -1,0 +1,16 @@
+[Unit]
+Description=Vinyl Tap Web UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=authbind --deep /home/pi/vinyl-tap/.venv/bin/python3 /home/pi/vinyl-tap/app.py --host 0.0.0.0 --port 443 --ssl-cert /home/pi/vinyl-tap/certs/PI_HOSTNAME.local.crt --ssl-key /home/pi/vinyl-tap/certs/PI_HOSTNAME.local.key
+WorkingDirectory=/home/pi/vinyl-tap
+Restart=on-failure
+RestartSec=5
+KillMode=process
+MemoryLimit=256M
+User=pi
+
+[Install]
+WantedBy=multi-user.target

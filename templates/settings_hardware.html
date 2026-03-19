@@ -132,11 +132,11 @@
     {% if is_production %}
     <div class="field">
       <label>Restart App</label>
-      <p class="hint">Restart just the vinyl-web service. Faster than a full reboot - unavailable for ~5 seconds.</p>
+      <p class="hint">Restart just the vinyltap service. Faster than a full reboot - unavailable for ~5 seconds.</p>
       <form method="POST" action="/settings/restart">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="save-btn"
-                onclick="return confirm('Restart the vinyl-web service?')">Restart App</button>
+                onclick="return confirm('Restart the vinyltap service?')">Restart App</button>
       </form>
     </div>
     {% endif %}

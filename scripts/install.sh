@@ -1,19 +1,19 @@
 #!/bin/bash
-# Vinyl Emulator — fresh install on Raspberry Pi OS
+# Vinyl Tap — fresh install on Raspberry Pi OS
 #
 # Run:
-#   curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-emulator/main/scripts/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/markwmccall/vinyl-tap/main/scripts/install.sh | bash
 #
 # This script downloads the latest release and runs setup.sh.
 # Requires: curl, python3, git
 
 set -e
 
-REPO="markwmccall/vinyl-emulator"
-INSTALL_DIR="${HOME}/vinyl-emulator"
+REPO="markwmccall/vinyl-tap"
+INSTALL_DIR="${HOME}/vinyl-tap"
 
 echo ""
-echo "=== Vinyl Emulator Installer ==="
+echo "=== Vinyl Tap Installer ==="
 echo ""
 
 # Fetch the latest release tag from GitHub

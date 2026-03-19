@@ -120,6 +120,9 @@ def client():
 
 @pytest.fixture
 def temp_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(core_config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(core_config, "CONFIG_PATH", str(tmp_path / "config.json"))
+    monkeypatch.setattr(core_config, "TAGS_PATH", str(tmp_path / "tags.json"))
     config_file = tmp_path / "config.json"
     config_file.write_text(json.dumps({
         "sn": "3",
@@ -127,6 +130,4 @@ def temp_config(tmp_path, monkeypatch):
         "speaker_name": "Family Room",
         "nfc_mode": "mock"
     }))
-    import app
-    monkeypatch.setattr(core_config, "CONFIG_PATH", str(config_file))
     return config_file

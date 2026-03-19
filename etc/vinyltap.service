@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=authbind --deep /home/pi/vinyl-tap/.venv/bin/python3 /home/pi/vinyl-tap/app.py --host 0.0.0.0 --port 443 --ssl-cert /home/pi/vinyl-tap/certs/PI_HOSTNAME.local.crt --ssl-key /home/pi/vinyl-tap/certs/PI_HOSTNAME.local.key
+ExecStart=authbind --deep /home/pi/vinyl-tap/.venv/bin/python3 /home/pi/vinyl-tap/app.py --host 0.0.0.0 --port 443 --ssl-cert /home/pi/vinyl-tap/certs/PI_HOSTNAME.local.crt --ssl-key /home/pi/vinyl-tap/certs/PI_HOSTNAME.local.key --data-dir DATA_DIR
 WorkingDirectory=/home/pi/vinyl-tap
 Restart=on-failure
 RestartSec=5

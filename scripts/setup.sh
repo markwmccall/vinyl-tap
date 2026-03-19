@@ -11,11 +11,13 @@ set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 USERNAME="$(whoami)"
+DATA_DIR="$HOME/.local/share/vinyltap"
 
 echo ""
 echo "=== Vinyl Tap Setup ==="
 echo "Repo: $REPO_DIR"
 echo "User: $USERNAME"
+echo "Data: $DATA_DIR"
 echo ""
 
 # --- System packages ---
@@ -74,17 +76,36 @@ python3 -m venv --system-site-packages "$REPO_DIR/.venv"
 "$REPO_DIR/.venv/bin/pip" install -r "$REPO_DIR/requirements.txt"
 "$REPO_DIR/.venv/bin/pip" install adafruit-circuitpython-pn532 RPi.GPIO spidev
 
-# --- Config file ---
-echo "[4/5] Setting up config..."
-if [ ! -f "$REPO_DIR/config.json" ]; then
-    cp "$REPO_DIR/config.json.example" "$REPO_DIR/config.json"
+# --- Data directory ---
+echo "[4/5] Setting up data directory and config..."
+mkdir -p "$DATA_DIR"
+
+# Migrate config.json from old in-project location
+if [ -f "$REPO_DIR/config.json" ] && [ ! -f "$DATA_DIR/config.json" ]; then
+    cp "$REPO_DIR/config.json" "$DATA_DIR/config.json"
+    echo "      Migrated config.json to $DATA_DIR"
+fi
+
+# Migrate tags.json (check both known old locations)
+if [ ! -f "$DATA_DIR/tags.json" ]; then
+    if [ -f "$REPO_DIR/data/tags.json" ]; then
+        cp "$REPO_DIR/data/tags.json" "$DATA_DIR/tags.json"
+        echo "      Migrated tags.json to $DATA_DIR"
+    elif [ -f "$REPO_DIR/tags.json" ]; then
+        cp "$REPO_DIR/tags.json" "$DATA_DIR/tags.json"
+        echo "      Migrated tags.json to $DATA_DIR"
+    fi
+fi
+
+if [ ! -f "$DATA_DIR/config.json" ]; then
+    cp "$REPO_DIR/config.json.example" "$DATA_DIR/config.json"
     # Set nfc_mode to pn532 since we're on the Pi
     python3 -c "
 import json
-with open('$REPO_DIR/config.json') as f:
+with open('$DATA_DIR/config.json') as f:
     c = json.load(f)
 c['nfc_mode'] = 'pn532'
-with open('$REPO_DIR/config.json', 'w') as f:
+with open('$DATA_DIR/config.json', 'w') as f:
     json.dump(c, f, indent=2)
 "
     echo "      Created config.json with nfc_mode=pn532"
@@ -97,7 +118,7 @@ fi
 echo "[5/5] Installing systemd services..."
 
 # Substitute actual username, repo path, and hostname into service file
-sed "s|/home/pi/vinyl-tap|$REPO_DIR|g; s|User=pi|User=$USERNAME|g; s|PI_HOSTNAME|$PI_HOSTNAME|g" \
+sed "s|/home/pi/vinyl-tap|$REPO_DIR|g; s|User=pi|User=$USERNAME|g; s|PI_HOSTNAME|$PI_HOSTNAME|g; s|DATA_DIR|$DATA_DIR|g" \
     "$REPO_DIR/etc/vinyltap.service" \
     | sudo tee /etc/systemd/system/vinyltap.service > /dev/null
 

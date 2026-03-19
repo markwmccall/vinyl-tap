@@ -4,7 +4,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CERTS_DIR="$SCRIPT_DIR/certs"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+CERTS_DIR="$PROJECT_ROOT/certs"
 CERT="$CERTS_DIR/vinyltap-dev.local.crt"
 KEY="$CERTS_DIR/vinyltap-dev.local.key"
 HOSTNAME="vinyltap-dev.local"
@@ -50,12 +51,12 @@ else
 fi
 
 # ── 4. Python virtual environment ─────────────────────────────────────────────
-if [ -d "$SCRIPT_DIR/.venv" ]; then
+if [ -d "$PROJECT_ROOT/.venv" ]; then
   echo "[OK] Virtual environment exists"
 else
   echo "[+] Creating virtual environment..."
-  python3 -m venv "$SCRIPT_DIR/.venv"
-  "$SCRIPT_DIR/.venv/bin/pip" install -r "$SCRIPT_DIR/requirements.txt" -q
+  python3 -m venv "$PROJECT_ROOT/.venv"
+  "$PROJECT_ROOT/.venv/bin/pip" install -r "$PROJECT_ROOT/requirements.txt" -q
   echo "[OK] Virtual environment ready"
 fi
 

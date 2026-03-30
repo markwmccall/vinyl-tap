@@ -79,6 +79,14 @@ class TestPlayAlbum:
         play_album("10.0.0.12", SAMPLE_TRACKS, _make_provider(), "3")
         mock_speaker.play_from_queue.assert_called_once_with(0)
 
+    def test_starts_playback_after_first_track(self, mock_speaker):
+        from core.sonos_player import play_album
+        call_order = []
+        mock_speaker.avTransport.AddURIToQueue.side_effect = lambda *a, **k: call_order.append("enqueue")
+        mock_speaker.play_from_queue.side_effect = lambda *a, **k: call_order.append("play")
+        play_album("10.0.0.12", SAMPLE_TRACKS, _make_provider(), "3")
+        assert call_order == ["enqueue", "play", "enqueue"]
+
     def test_does_nothing_for_empty_track_list(self, mock_speaker):
         from core.sonos_player import play_album
         play_album("10.0.0.12", [], MagicMock(), "3")

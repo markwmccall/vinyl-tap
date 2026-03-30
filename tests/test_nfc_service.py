@@ -1,3 +1,5 @@
+import json
+import logging
 import threading
 from unittest.mock import MagicMock, patch
 
@@ -104,6 +106,40 @@ class TestNfcLoopAutoRegister:
         tags = core_config._load_tags()
         assert len(tags) == 1
         assert tags[0]["name"] == "Already There"  # not overwritten
+
+    def test_logs_tap_to_play_timing(self, tmp_path, monkeypatch, caplog):
+        self._make_config(tmp_path)
+        mock_nfc = MagicMock()
+        mock_nfc.read_tag.side_effect = ["apple:1440903625", None, KeyboardInterrupt()]
+        monkeypatch.setattr(nfc_service, "_nfc", mock_nfc)
+
+        provider = MagicMock()
+        provider.get_album_tracks.return_value = SAMPLE_TRACKS
+
+        # time.time() is called by our t0/t1/t2 checkpoints AND by logging.LogRecord
+        # for each log.info(). Use a counter that returns controlled values for the
+        # three checkpoint calls (1, 2, 4) and a neutral value for logging calls.
+        call_count = [0]
+        checkpoint_values = {1: 0.0, 2: 1.5, 4: 4.0}
+        def mock_time():
+            call_count[0] += 1
+            return checkpoint_values.get(call_count[0], 0.0)
+
+        with patch("core.nfc_service.get_provider", return_value=provider), \
+             patch("core.nfc_service.play_album"), \
+             patch("core.nfc_service.play_playlist"), \
+             patch("core.nfc_service.time.time", side_effect=mock_time):
+            with caplog.at_level(logging.INFO, logger="core.nfc_service"):
+                try:
+                    nfc_service._nfc_loop(str(tmp_path / "config.json"))
+                except KeyboardInterrupt:
+                    pass
+
+        timing_logs = [r.message for r in caplog.records if "Tap-to-play timing" in r.message]
+        assert len(timing_logs) == 1
+        assert "1.50" in timing_logs[0]   # t1 - t0
+        assert "2.50" in timing_logs[0]   # t2 - t1
+        assert "4.00" in timing_logs[0]   # t2 - t0
 
     def test_auto_record_failure_does_not_stop_loop(self, tmp_path, monkeypatch):
         self._make_config(tmp_path)

@@ -149,7 +149,7 @@ def _do_play_album(speaker, track_dicts, provider, sn):
     coordinator = speaker.group.coordinator
     udn = provider.lookup_udn(coordinator, sn)
     coordinator.clear_queue()
-    for track in track_dicts:
+    for i, track in enumerate(track_dicts):
         uri = provider.build_track_uri(track["track_id"], sn)
         metadata = provider.build_track_didl(track, udn)
         coordinator.avTransport.AddURIToQueue([
@@ -159,7 +159,8 @@ def _do_play_album(speaker, track_dicts, provider, sn):
             ("DesiredFirstTrackNumberEnqueued", 0),
             ("EnqueueAsNext", 0),
         ])
-    coordinator.play_from_queue(0)
+        if i == 0:
+            coordinator.play_from_queue(0)
 
 
 def _do_play_playlist(speaker, playlist_id, title, provider, sn):

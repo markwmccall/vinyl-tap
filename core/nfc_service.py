@@ -105,12 +105,14 @@ def _nfc_loop(config_path):
             continue  # same card still present - ignore
 
         _nfc_last_tag = tag_data
+        t0 = time.time()
         try:
             tag = parse_tag_data(tag_data)
             provider = get_provider(tag["service"])
             config = _load_config()
             if tag["type"] == "playlist":
                 info = provider.get_playlist_info(tag["id"]) or {}
+                t1 = time.time()
                 play_playlist(config["speaker_ip"], tag["id"], info.get("title", ""),
                               provider, config["sn"],
                               speaker_name=config.get("speaker_name"), config_path=config_path)
@@ -119,11 +121,16 @@ def _nfc_loop(config_path):
             else:
                 tracks = (provider.get_track(tag["id"]) if tag["type"] == "track"
                           else provider.get_album_tracks(tag["id"]))
+                t1 = time.time()
                 play_album(config["speaker_ip"], tracks, provider, config["sn"],
                            speaker_name=config.get("speaker_name"), config_path=config_path)
                 if tracks and not tag_in_collection(tag_data):
                     _auto_record(tag_data, tag, tracks)
-            log.info("Playing %s %s", tag['type'], tag['id'])
+            t2 = time.time()
+            log.info(
+                "Tap-to-play timing: tag_detect→provider %.2fs, provider→play %.2fs, total %.2fs",
+                t1 - t0, t2 - t1, t2 - t0,
+            )
         except Exception as e:
             log.error("NFC play error: %s", e, exc_info=True)
 
